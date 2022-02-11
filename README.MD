@@ -1,6 +1,6 @@
 # Exclusive_mode_mapper
 ## 说明
-[mouse-keyboard-map-touch](https://driverlin.github.io/mouse-keyboard-map-touch/)的python实现
+[mouse-keyboard-map-touch](https://github.com/DriverLin/mouse-keyboard-map-touch)的python实现
 
 相比于C的版本，扩展功能的开发更加方便
 
