@@ -20,3 +20,13 @@ git clone https://github.com/DriverLin/py-touch-mapper
 ```
 sudo python ./main.py 触屏设备号 鼠标设备号 键盘设备号 映射文件路径
 ```
+
+
+
+[创建映射文件](https://driverlin.github.io/py-touch-mapper/create-mapper/build/)
+
+按住键盘按键点击即可添加映射
+
+8 9 0 分别对应鼠标 左 中 右 键 
+
+如有需要 可手动新修改配置文件
