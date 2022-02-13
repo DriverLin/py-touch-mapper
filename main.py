@@ -235,7 +235,6 @@ class touchController:
 
 global_exclusive_flag = False
 
-
 def translate_keyname_keycode(keyname):
     if keyname in keynamemapval:
         return keynamemapval[keyname]
@@ -246,6 +245,7 @@ def translate_keyname_keycode(keyname):
 
 class eventHandeler:
     def __init__(self, map_config, touchController) -> None:
+        self.mouseLock = threading.Lock()  # 由于鼠标操作来源不唯一(定时释放和事件驱动的移动)所以需要锁
         self.SWITCH_KEY = translate_keyname_keycode(map_config["MOUSE"]["SWITCH_KEY"])
         self.keyMap = {
             translate_keyname_keycode(keyname): map_config["KEY_MAPS"][keyname]
@@ -334,17 +334,60 @@ class eventHandeler:
 
                 if self.mouseTouchID != -1:
                     if self.mouseNotMoveCount > 100:
-                        self.touchController.postEvent(
-                            RELEASE_FLAG, self.mouseTouchID, 0, 0
-                        )
-                        self.mouseTouchID = -1
+                        # self.touchController.postEvent(
+                        #     RELEASE_FLAG, self.mouseTouchID, 0, 0
+                        # )
+                        # self.mouseTouchID = -1
                         # print("release mouse !")
+                        self.handelMouseMoveAction(type=RELEASE_FLAG)
                     else:
                         self.mouseNotMoveCount += 1
 
                 time.sleep(0.004)
 
         threading.Thread(target=wheelThreadFunc).start()
+
+    def handelMouseMoveAction(self, offsetX=0, offsetY=0, type=None):
+        self.mouseLock.acquire()
+        if type == None:
+            x = offsetX * self.mouseSpeedX
+            y = offsetY * self.mouseSpeedY
+            self.mouseNotMoveCount = 0
+            # 计算映射坐标
+            self.realtiveX -= y
+            self.realtiveY += x
+            # 如果触摸ID为-1即没有按下 或 映射坐标超出屏幕范围
+            if (
+                self.mouseTouchID == -1
+                or self.realtiveX < 10
+                or self.realtiveX > self.screenSizeX - 10
+                or self.realtiveY < 10
+                or self.realtiveY > self.screenSizeY - 10
+            ):
+                # 释放触摸  一种情况是第一次申请，ID=-1 不响应释放 另一种情况是触及边界 正常释放
+                self.realtiveX = self.mouseStartX + getRand()
+                self.realtiveY = self.mouseStartY + getRand()
+                
+                self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
+                # 申请触摸ID 随机初始偏移量
+                self.mouseTouchID = self.touchController.postEvent(
+                    MOUSE_REQUIRE,
+                    -1,
+                    self.realtiveX,
+                    self.realtiveY,
+                )
+                # 重新计算映射坐标
+                self.realtiveX -=  y
+                self.realtiveY -=  x
+            # print("MOUSE MOVE [",self.realtiveX,self.realtiveY,"]")
+            # 鼠标移动
+            self.touchController.postEvent(
+                MOVE_FLAG, self.mouseTouchID, self.realtiveX, self.realtiveY
+            )
+        elif type == RELEASE_FLAG:
+            self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
+            self.mouseTouchID = -1
+        self.mouseLock.release()
 
     def handelKeyAction(self, keycode, updown):
         action = self.keyMap[keycode]
@@ -431,9 +474,8 @@ class eventHandeler:
         print(json.dumps(self.wheelMap, indent=4))
 
     def changeWheelStause(self, key, updown):
-        # 更新wasd按键的状态
+        # 更新wasd按键的状态 并根据状态计算新坐标
         self.wheel_satuse[self.wheel_wasd.index(key)] = updown
-        # 根据状态计算新坐标
         x_Asix = 1 - self.wheel_satuse[1] + self.wheel_satuse[3]
         y_Asix = 1 - self.wheel_satuse[2] + self.wheel_satuse[0]
         map_value = x_Asix * 3 + y_Asix
@@ -474,45 +516,8 @@ class eventHandeler:
 
         # 如果处于映射模式且x或y坐标不为0  在这里处理鼠标事件
         if global_exclusive_flag == True and (x != 0 or y != 0):
-            # 鼠标静止计数置零
-            x *= self.mouseSpeedX
-            y *= self.mouseSpeedY
-            self.mouseNotMoveCount = 0
-            # 计算映射坐标
-            self.realtiveX -= y
-            self.realtiveY += x
-            # 如果触摸ID为-1即没有按下 或 映射坐标超出屏幕范围
-            if (
-                self.mouseTouchID == -1
-                or self.realtiveX < 0
-                or self.realtiveX > self.screenSizeX
-                or self.realtiveY < 0
-                or self.realtiveY > self.screenSizeY
-            ):
-                randx, randy = getRand(), getRand()
+            self.handelMouseMoveAction(offsetX=x, offsetY=y)
 
-                # 释放触摸  第一次申请ID=-1 不响应释放
-                self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
-
-                # 申请触摸ID 随机初始偏移量
-                self.mouseTouchID = self.touchController.postEvent(
-                    MOUSE_REQUIRE,
-                    -1,
-                    self.mouseStartX + randx,
-                    self.mouseStartY + randy,
-                )
-                # 重新计算映射坐标
-                self.realtiveX = self.mouseStartX + randx - y
-                self.realtiveY = self.mouseStartY + randy + x
-
-            # print("MOUSE MOVE [",self.realtiveX,self.realtiveY,"]")
-
-            # 发送鼠标移动事件
-            self.touchController.postEvent(
-                MOVE_FLAG, self.mouseTouchID, self.realtiveX, self.realtiveY
-            )
-
-    
 
 def noexclusiveMode(keyboardEvenPath, handelerInstance):
     global global_exclusive_flag
