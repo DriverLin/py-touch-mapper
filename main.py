@@ -245,6 +245,9 @@ def translate_keyname_keycode(keyname):
 
 class eventHandeler:
     def __init__(self, map_config, touchController) -> None:
+
+        self.exit_flag = False
+
         self.mouseLock = threading.Lock()  # 由于鼠标操作来源不唯一(定时释放和事件驱动的移动)所以需要锁
         self.SWITCH_KEY = translate_keyname_keycode(map_config["MOUSE"]["SWITCH_KEY"])
         self.switch_key_down = False
@@ -289,7 +292,7 @@ class eventHandeler:
         def wheelThreadFunc():
             wheelNow = (self.wheelMap[4][0], self.wheelMap[4][1])
             wheelTouchId = -1
-            while True:
+            while not self.exit_flag:
                 # 等于中心 直接释放
                 if self.wheelTarget == self.wheelMap[4]:
                     if wheelTouchId != -1:
@@ -347,6 +350,9 @@ class eventHandeler:
                 time.sleep(0.004)
 
         threading.Thread(target=wheelThreadFunc).start()
+    def destroy(self):
+        self.exit_flag = True
+
 
     def handelMouseMoveAction(self, offsetX=0, offsetY=0, type=None):
         self.mouseLock.acquire()
@@ -492,13 +498,11 @@ class eventHandeler:
             if type == EV_KEY and code == self.SWITCH_KEY:
                 if value == UP:
                     self.switch_key_down = False
-                    print("DEBUG:switch key up")
                     global_exclusive_flag = not global_exclusive_flag
                     print("exclusive mode:", global_exclusive_flag)
                     return
                 else:
                     self.switch_key_down = True
-                    print("DEBUG:switch key down")
                     return
 
             #非独占模式 且 switch按下中 按下esc键 则退出
@@ -639,7 +643,7 @@ if __name__ == "__main__":
     while True:
         noexclusiveMode(keyboardEvenPath, handelerInstance)
         if InterruptedFlag == True:
-            print("InterruptedFlag = True 退出")
+            handelerInstance.destroy()
             exit(0)
         exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance)
     
