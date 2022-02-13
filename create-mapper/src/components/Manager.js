@@ -240,7 +240,10 @@ export default function Manager() {
             },
             "MOUSE": {
                 "SWITCH_KEY": "KEY_GRAVE",
-                "POS": settings.mouse.pos,
+                "POS": [
+                    settings.mouse.pos[1],
+                    settings.mouse.pos[0]
+                ],
                 "SPEED": [
                     settings.mouse.speed[1],
                     settings.mouse.speed[0]

@@ -79,6 +79,6 @@
     "insert": "KEY_INSERT",
     "delete": "KEY_DELETE",
     "8": "BTN_LEFT",
-    "9": "BTN_RIGHT",
-    "0": "BTN_MIDDLE"
+    "9": "BTN_MIDDLE",
+    "0": "BTN_RIGHT"
 }
