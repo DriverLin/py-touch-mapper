@@ -892,3 +892,26 @@ if __name__ == "__main__":
                 handelerInstance.destroy()
                 exit(0)
             exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance)
+
+
+#==============================================================================
+#TO DO
+# 重写调用方式 支持多个设备同时调用 
+# python ./main.py --touch 5 --js 16 17 18 --mouse 19 25 -- keyboard 20 --config ./config.json
+# 快速模式 
+# python ./main.py 5 16 17 config.json
+# python ./main.py js 5 16 config.json
+# python ./main.py full 5 16 17 config.json 
+# 例如可以插入两个鼠标 两个手柄 一个键盘 都可以同时处理 
+# 按键事件重复则丢弃 例如第一个键盘按下A没有释放 则第二个键盘按下A时 丢弃
+# 鼠标移动 则相互叠加 与手柄的视角移动相重叠 使用统一接口移动视角
+#
+# 手柄则存在仅两个个模式 映射 模拟鼠标 
+# 再程序一开始 手柄就进入独占模式
+# uinput接口创建一个虚拟鼠标键盘复合设备供手柄转换
+# 通过组合键 SELECT + RS 切换
+# 
+# 关于手柄的按键检测 如果能直接用iotcl读取就好了
+# 最不济的情况下 是内置ps4 ps5 xbox 的配置文件 然后提供对用户接口 再提供一个小工具创建手柄配置文件
+# ...... 
+#==============================================================================
