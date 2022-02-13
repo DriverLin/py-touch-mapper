@@ -52,7 +52,7 @@ export default function DraggableContainer(props) {
             left: left_top[0],
             top: left_top[1],
             overflow: "hidden",
-            borderRadius: "5px",
+            borderRadius: "8px",
         }}
     >
         <div style={{ height: "30px", backgroundColor: "#607D8B" }}

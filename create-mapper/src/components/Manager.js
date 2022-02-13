@@ -220,13 +220,13 @@ export default function Manager() {
             } else if (keyData.type === "drag") {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "DRAG",
-                    "POS_s": keyData.pos_s.map(pos => [translateY(pos[1]), translateX(pos[0])]),
+                    "POS_S": keyData.pos_s.map(pos => [translateY(pos[1]), translateX(pos[0])]),
                     "INTERVAL": keyData.interval
                 }
             } else if (keyData.type === "mult_press") {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "MULT_PRESS",
-                    "POS_s": keyData.pos_s.map(pos => [translateY(pos[1]), translateX(pos[0])]),
+                    "POS_S": keyData.pos_s.map(pos => [translateY(pos[1]), translateX(pos[0])]),
                 }
             }
 
