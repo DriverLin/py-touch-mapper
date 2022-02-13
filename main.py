@@ -247,6 +247,7 @@ class eventHandeler:
     def __init__(self, map_config, touchController) -> None:
         self.mouseLock = threading.Lock()  # 由于鼠标操作来源不唯一(定时释放和事件驱动的移动)所以需要锁
         self.SWITCH_KEY = translate_keyname_keycode(map_config["MOUSE"]["SWITCH_KEY"])
+        self.switch_key_down = False
         self.keyMap = {
             translate_keyname_keycode(keyname): map_config["KEY_MAPS"][keyname]
             for keyname in map_config["KEY_MAPS"]
@@ -483,7 +484,7 @@ class eventHandeler:
 
     def handelEvents(self, events):
         # 全局变量 是否是映射模式
-        global global_exclusive_flag
+        global global_exclusive_flag,InterruptedFlag
         # x,y 鼠标坐标
         x, y = 0, 0
         for (type, code, value) in events:
@@ -491,17 +492,19 @@ class eventHandeler:
             if type == EV_KEY and code == self.SWITCH_KEY:
                 if value == UP:
                     self.switch_key_down = False
+                    print("DEBUG:switch key up")
                     global_exclusive_flag = not global_exclusive_flag
                     print("exclusive mode:", global_exclusive_flag)
                     return
                 else:
                     self.switch_key_down = True
+                    print("DEBUG:switch key down")
                     return
 
             #非独占模式 且 switch按下中 按下esc键 则退出
             if self.switch_key_down and global_exclusive_flag == False  and type == EV_KEY and code == 1 and value == UP:
-                global_exclusive_flag = True
-                InterruptedFlag = True           
+                global_exclusive_flag = not global_exclusive_flag
+                InterruptedFlag = True   
                 print("SWITCH_KEY + ESC pressed ,now exit ...")
                 return
 
@@ -533,7 +536,7 @@ class eventHandeler:
 
 def noexclusiveMode(keyboardEvenPath, handelerInstance):
     global global_exclusive_flag
-    print("独占模式 = False")
+    print("非独占模式")
     buffer = []
     with open(keyboardEvenPath, "rb") as f:
         while not global_exclusive_flag:
@@ -552,12 +555,11 @@ def noexclusiveMode(keyboardEvenPath, handelerInstance):
                     )
                 )
             # handelerInstance.handelEvent(e_type, e_code, e_val)
-
+    print("退出 非独占模式")
 
 def exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance):
     global global_exclusive_flag
-    print("独占模式 = True")
-
+    print("独占模式")
     def readMouseEvent():
         buffer = []
         with open(mouseEventPath, "rb") as f:
@@ -611,7 +613,7 @@ def exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance):
     mouseReadingThread.join()
     keyboardReadingThread.join()
 
-    print("退出独占模式")
+    print("退出 独占模式")
 
 
 InterruptedFlag = False
@@ -634,8 +636,10 @@ if __name__ == "__main__":
     touchControlInstance = touchController(touchEventPath)
     handelerInstance = eventHandeler(map_config, touchControlInstance)
 
-    while InterruptedFlag == False:
+    while True:
         noexclusiveMode(keyboardEvenPath, handelerInstance)
         if InterruptedFlag == True:
+            print("InterruptedFlag = True 退出")
             exit(0)
         exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance)
+    
