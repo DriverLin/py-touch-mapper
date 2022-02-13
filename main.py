@@ -490,9 +490,21 @@ class eventHandeler:
             # 如果是模式切换键释放 则切换模式
             if type == EV_KEY and code == self.SWITCH_KEY:
                 if value == UP:
+                    self.switch_key_down = False
                     global_exclusive_flag = not global_exclusive_flag
                     print("exclusive mode:", global_exclusive_flag)
                     return
+                else:
+                    self.switch_key_down = True
+                    return
+
+            #非独占模式 且 switch按下中 按下esc键 则退出
+            if self.switch_key_down and global_exclusive_flag == False  and type == EV_KEY and code == 1 and value == UP:
+                global_exclusive_flag = True
+                InterruptedFlag = True           
+                print("SWITCH_KEY + ESC pressed ,now exit ...")
+                return
+
             # 当处于映射模式时 处理事件
             if global_exclusive_flag == True:
                 # 如果是坐标事件 则修改x,y坐标 并在全部事件处理完成后再处理
@@ -624,4 +636,6 @@ if __name__ == "__main__":
 
     while InterruptedFlag == False:
         noexclusiveMode(keyboardEvenPath, handelerInstance)
+        if InterruptedFlag == True:
+            exit(0)
         exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance)
