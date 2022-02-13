@@ -103,8 +103,8 @@ const CostumedInput = (props) => {
     />
 }
 
-const WheelShow = (props) => { 
-    const radius = props.data.range * 2 
+const WheelShow = (props) => {
+    const radius = props.data.range * 2
     return <div>
         <div style={{
             position: 'fixed',
@@ -122,11 +122,11 @@ const WheelShow = (props) => {
             position: 'fixed',
             left: props.data.pos[0],
             top: props.data.pos[1],
-            width: radius ,
-            height: radius ,
-            borderRadius: radius ,
-            marginLeft: radius  / -2 -4,
-            marginTop: radius  / -2 -4,
+            width: radius,
+            height: radius,
+            borderRadius: radius,
+            marginLeft: radius / -2 - 4,
+            marginTop: radius / -2 - 4,
             border: "4px solid #FF5722",
             pointerEvents: "none",
         }} />
@@ -179,14 +179,14 @@ export default function Manager() {
     })
 
 
-    
+
     const exportJSON = () => {
         // console.log(JSON.stringify(settings, null, 4))
         const showWidth = document.getElementById("img").width
         const showHeight = document.getElementById("img").height
         const screenWidth = settings.screen.size[0]
         const screenHeight = settings.screen.size[1]
-        const translateX = (x) => Math.round(x * screenWidth / showWidth) 
+        const translateX = (x) => Math.round(x * screenWidth / showWidth)
         const translateY = (y) => Math.round(screenHeight - y * screenHeight / showHeight)
         const translateKeyName = (jskey) => keyNameMap.default[jskey]
         const KEY_MAPS = {}
@@ -195,16 +195,16 @@ export default function Manager() {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "PRESS",
                     "POS": [
-                        translateX(keyData.x),
-                        translateY(keyData.y)
+                        translateY(keyData.y),
+                        translateX(keyData.x)
                     ]
                 }
             } else if (keyData.type === "click") {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "CLICK",
                     "POS": [
-                        translateX(keyData.x),
-                        translateY(keyData.y)
+                        translateY(keyData.y),
+                        translateX(keyData.x)
                     ],
                     "INTERVAL": keyData.interval
                 }
@@ -212,21 +212,21 @@ export default function Manager() {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "AUTO_FIRE",
                     "POS": [
-                        translateX(keyData.x),
-                        translateY(keyData.y)
+                        translateY(keyData.y),
+                        translateX(keyData.x)
                     ],
                     "INTERVAL": keyData.interval
                 }
             } else if (keyData.type === "drag") {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "DRAG",
-                    "POS_s": keyData.pos_s.map(pos => [translateX(pos[0]), translateY(pos[1])]),
+                    "POS_s": keyData.pos_s.map(pos => [translateY(pos[1]), translateX(pos[0])]),
                     "INTERVAL": keyData.interval
                 }
             } else if (keyData.type === "mult_press") {
                 KEY_MAPS[translateKeyName(keyData.key)] = {
                     "TYPE": "MULT_PRESS",
-                    "POS_s": keyData.pos_s.map(pos => [translateX(pos[0]), translateY(pos[1])]),
+                    "POS_s": keyData.pos_s.map(pos => [translateY(pos[1]), translateX(pos[0])]),
                 }
             }
 
@@ -234,22 +234,22 @@ export default function Manager() {
         const exportResult = {
             "SCREEN": {
                 "SIZE": [
-                    settings.screen.size[0],
-                    settings.screen.size[1]
+                    settings.screen.size[1],
+                    settings.screen.size[0]
                 ]
             },
             "MOUSE": {
                 "SWITCH_KEY": "KEY_GRAVE",
                 "POS": settings.mouse.pos,
                 "SPEED": [
-                    settings.mouse.speed[0],
-                    settings.mouse.speed[1]
+                    settings.mouse.speed[1],
+                    settings.mouse.speed[0]
                 ]
             },
             "WHEEL": {
                 "POS": [
-                    translateX(settings.wheel.pos[0]),
-                    translateY(settings.wheel.pos[1])
+                    translateY(settings.wheel.pos[1]),
+                    translateX(settings.wheel.pos[0])
                 ],
                 "RANGE": translateX(settings.wheel.range),
                 "WASD": [
@@ -331,7 +331,7 @@ export default function Manager() {
                         width: "100%",
                         marginTop: "10px",
                     }}
-                >{exportButtonText }</Button>
+                >{exportButtonText}</Button>
                 <Grid
                     container
                     direction="row"
@@ -461,19 +461,19 @@ export default function Manager() {
 
     }, [])
 
-    
+
 
 
     const KeyShow = (props) => {
         return <div>
             {props.data.type === "press" || props.data.type === "auto_fire" || props.data.type === "click" ? <FixedIcon x={props.data.x} y={props.data.y} text={props.data.key} /> : null}
-            {props.data.type === "mult_press" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} color={["#00796B","#ffffff"]}   /> : null}
-            {props.data.type === "drag" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} color={["#3F51B5","#ffffff"]}  /> : null}
+            {props.data.type === "mult_press" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} color={["#00796B", "#ffffff"]} /> : null}
+            {props.data.type === "drag" ? <GroupFixedIcon pos_s={props.data.pos_s} text={props.data.key} color={["#3F51B5", "#ffffff"]} /> : null}
         </div>
     }
 
 
-    
+
 
 
 
@@ -542,7 +542,7 @@ export default function Manager() {
         }, [])
         const CostumedDoubleInput = (props) => {
             return <div>
-                 <CostumedInput defaultValue={props.defaultValue[0]} onCommit={(value) => {
+                <CostumedInput defaultValue={props.defaultValue[0]} onCommit={(value) => {
                     updateKeyPoint(props.index, value, props.defaultValue[1])
                 }} />
                 <a> &emsp;</a>
@@ -705,7 +705,7 @@ export default function Manager() {
 
 
     const ControlPanel = () => {
-        
+
 
         return <div
             style={{
@@ -768,7 +768,7 @@ export default function Manager() {
             })
         }
         {
-            imgUrl ? <WheelShow data={settings.wheel} />:null
+            imgUrl ? <WheelShow data={settings.wheel} /> : null
         }
     </div>)
 }
