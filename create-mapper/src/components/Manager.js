@@ -412,6 +412,13 @@ export default function Manager() {
         setKeyMap(copy)
     }
 
+    const removeFromKeyMap  = (index) => {
+        const copy = [...keyMap];
+        copy.splice(index,1)
+        console.log(  keyMap,"==>",copy  )
+        setKeyMap(copy)
+    }
+
 
     const handelImgClick = (e) => {
         const x = e.clientX;
@@ -514,17 +521,17 @@ export default function Manager() {
         const [addButtonDisabled, setAddButtonDisabled] = useState(false)
         const readToAdd = () => { waitingForClick.current = true; setAddButtonDisabled(true) }
         const addKeyPoint = (x, y) => {
-            const copy = props.data.pos_s;
+            const copy = [...props.data.pos_s];
             copy.push([x, y])
             handelKeyMapChange(props.data.key, { pos_s: copy })
         }
         const updateKeyPoint = (index, x, y) => {
-            const copy = props.data.pos_s;
+            const copy = [...props.data.pos_s];
             copy[index] = [x, y]
             handelKeyMapChange(props.data.key, { pos_s: copy })
         }
         const removeKeyPoint = (index) => {
-            const copy = props.data.pos_s;
+            const copy = [...props.data.pos_s];
             copy.splice(index, 1)
             handelKeyMapChange(props.data.key, { pos_s: copy })
         }
@@ -669,16 +676,17 @@ export default function Manager() {
             padding="10px"
         >
             <Grid container
+                container
                 direction="row"
+                justifyContent="flex-start"
+                alignItems="center"
             >
                 {
                     props.data.type === "press" || props.data.type === "auto_fire" || props.data.type === "click" ?
-                        <Grid item xs={6}><a>{`${props.data.key} : (${props.data.x} , ${props.data.y})`}</a></Grid> :
-                        <Grid item xs={6}><a>{`${props.data.key} `}</a></Grid>
-
-
+                        <Grid item xs={5}><a>{`${props.data.key} : (${props.data.x} , ${props.data.y})`}</a></Grid> :
+                        <Grid item xs={5}><a>{`${props.data.key} `}</a></Grid>
                 }
-                <Grid item xs={6}>
+                <Grid item xs={5}>
                     <FormControl>
                         <InputLabel id={`${props.data.key}-select`}></InputLabel>
                         <Select
@@ -694,6 +702,14 @@ export default function Manager() {
                             <MenuItem value={"mult_press"}>多点触摸</MenuItem>
                         </Select>
                     </FormControl>
+                </Grid>
+                <Grid item xs={2}>
+                <IconButton onClick={() => {
+                    console.log("remove index",props.index)
+                    removeFromKeyMap(props.index)
+                  }}>
+                        <HighlightOffIcon />
+                    </IconButton>
                 </Grid>
             </Grid>
             {props.data.type === "click" ? <Type_click data={props.data} /> : null}
@@ -745,7 +761,7 @@ export default function Manager() {
                                     marginLeft: "10px",
                                 }}
                             >
-                                <KeySettingRender data={data} />
+                                <KeySettingRender data={data} index={index}/>
                             </Paper>
 
                         </Grid>)
