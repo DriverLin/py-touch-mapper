@@ -497,6 +497,7 @@ class eventHandeler:
                     return
                 else:
                     self.switch_key_down = True
+                    return
 
             #非独占模式 且 switch按下中 按下esc键 则退出
             if self.switch_key_down and global_exclusive_flag == False  and type == EV_KEY and code == 1 and value == UP:
@@ -637,6 +638,6 @@ if __name__ == "__main__":
     while True:
         noexclusiveMode(keyboardEvenPath, handelerInstance)
         if InterruptedFlag == True:
-            break
+            exit(0)
         exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance)
-    exit(0)
+    
