@@ -50,6 +50,7 @@ EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
 SYN_EVENT = eventPacker(EV_SYN, SYN_REPORT, 0x0)
 EVIOCGNAME = lambda len: ioctl_opt.IOC(ioctl_opt.IOC_READ, ord("E"), 0x06, len)
 EVIOCGRAB = lambda len: ioctl_opt.IOW(ord("E"), 0x90, ctypes.c_int)
+EVIOCGABS = lambda axis : ioctl_opt.IOR(ord('E'), 0x40 + axis, "ffffff")
 
 HAT_D_U = {
     "0.5_1.0": (1, DOWN),
@@ -71,7 +72,6 @@ LR_RT_VALUEMAP = {
 
 
 IN_DEADZONE = -1
-
 
 
 class touchController:
@@ -164,9 +164,16 @@ def translate_keyname_keycode(keyname):
     else:
         return keyname
 
+
 class eventHandeler:
     def __init__(
-        self, map_config, touchController, reportRate=250, jsViewRate=250, jsInfo=None,virtualDev=None
+        self,
+        map_config,
+        touchController,
+        reportRate=250,
+        jsViewRate=250,
+        jsInfo=None,
+        virtualDev=None,
     ) -> None:
         self.virtualDev = virtualDev
         self.jsInfo = jsInfo  # 手柄的配置信息 包含数值范围 按键信息等
@@ -231,13 +238,13 @@ class eventHandeler:
         # 修改wheelTarget 自动控制移动以及释放
         self.wheel_satuse = [0, 0, 0, 0]
         self.wheelTarget = [self.wheelMap[4][0], self.wheelMap[4][1]]
-        self.wheel_release = [True,True] # 确保键鼠自动释放仅释放一次
+        self.wheel_release = [True, True]  # 确保键鼠自动释放仅释放一次
 
         def wheelThreadFunc():
             wheelNow = [self.wheelMap[4][0], self.wheelMap[4][1]]
             while not self.exit_flag:
                 # 等于中心 直接释放
-                if self.wheelTarget == self.wheelMap[4] :
+                if self.wheelTarget == self.wheelMap[4]:
                     self.wheel_release[0] = True
 
                 else:
@@ -250,19 +257,21 @@ class eventHandeler:
                         targetX = (
                             self.wheelTarget[0]
                             if abs(restX) < 30
-                            else wheelNow[0] + int((10 + getRand()) * restX / abs(restX))
+                            else wheelNow[0]
+                            + int((10 + getRand()) * restX / abs(restX))
                         )
                         targetY = (
                             self.wheelTarget[1]
                             if abs(restY) < 30
-                            else wheelNow[1] + int((10 + getRand()) * restY / abs(restY))
+                            else wheelNow[1]
+                            + int((10 + getRand()) * restY / abs(restY))
                         )
                         wheelNow = (targetX, targetY)
                         pass
                         self.handelWheelMoveAction(targetX=targetX, targetY=targetY)
                     else:
                         pass
-                
+
                 if self.wheel_release[0] and self.wheel_release[1]:
                     self.handelWheelMoveAction(type=RELEASE_FLAG)
 
@@ -279,40 +288,55 @@ class eventHandeler:
 
         def jsMoveView():
             while not self.exit_flag:
-                if self.abs_last["RS_X"] == 0.5 and self.abs_last["RS_Y"] == 0.5:
+                (rs_x, rs_y) = self.getStick("RS")
+                if rs_x == 0.5 and rs_y == 0.5:
                     pass
                 else:
-                    speedX = (self.abs_last["RS_X"] - 0.5) * 2 * 24
-                    speedY = (self.abs_last["RS_Y"] - 0.5) * 2 * 24
-                    if self.mapMode == True:# 映射视角
+                    speedX = (rs_x - 0.5) * 2 * 24
+                    speedY = (rs_y - 0.5) * 2 * 24
+                    if self.mapMode == True:  # 映射视角
                         self.handelMouseMoveAction(int(speedX), int(speedY))
-                    else:    # 模拟键鼠
+                    else:  # 模拟键鼠
                         self.postVirtualDev("mouse", int(speedX), int(speedY))
-
                 time.sleep(self.jsViewRate)
-        
-        def lsMoveMouseWheel():
+
+        def lsMoveMouseWheel(targetStick):
             while not self.exit_flag:
                 if self.mapMode == True:
+                    time.sleep(0.1)  # 等待 切换模式
                     pass
                 else:
-                    if self.abs_last["LS_X"] == 0.5 and self.abs_last["LS_Y"] == 0.5:
-                        pass
+                    values = self.getStick("LS")
+                    stickValue = values[0] if targetStick == "LS_x" else values[1]
+                    if stickValue == 0.5:
+                        time.sleep(0.1)
                     else:
-                        speedX = (self.abs_last["LS_X"] - 0.5) * 2 * 24
-                        speedY = (self.abs_last["LS_Y"] - 0.5) * 2 * 24
-                        self.handelMouseMoveAction(int(speedX), int(speedY))
-                time.sleep(self.jsViewRate)
+                        value = 1 if stickValue > 0.5 else -1
+                        x_y = [value, 0] if targetStick == "LS_Y" else [0, value]
+                        # print(targetStick, value,x_y)
+                        self.postVirtualDev("wheel", x_y[0], x_y[1])
+                        time.sleep((1 - abs(stickValue - 0.5) * 2) * 0.95 + 0.05)
 
         threading.Thread(target=wheelThreadFunc).start()
         threading.Thread(target=mouseAutoRelease).start()
         threading.Thread(target=jsMoveView).start()
-        threading.Thread(target=lsMoveMouseWheel).start()
+        threading.Thread(target=lsMoveMouseWheel, args=("LS_X",)).start()
+        threading.Thread(target=lsMoveMouseWheel, args=("LS_Y",)).start()
+
+    def getStick(self, stick="LS"):
+        x_val = self.abs_last[f"{stick}_X"]
+        y_val = self.abs_last[f"{stick}_Y"]
+        deadZone = self.jsInfo["DEADZONE"][stick]
+        if deadZone[0] < x_val < deadZone[1] and deadZone[0] < y_val < deadZone[1]:
+            return (0.5, 0.5)
+        else:
+            return (x_val, y_val)
 
     def destroy(self):
         self.exit_flag = True
 
     def switchMode(self):
+        print("切换映射模式")
         self.mapMode = not self.mapMode
 
     def handelWheelMoveAction(self, targetX=-1, targetY=-1, type=None):
@@ -482,7 +506,7 @@ class eventHandeler:
         abs_x, abs_y = 0, 0
         mwheelx, mwheely = 0, 0
         for (type, code, value) in events:
-            if type == EV_KEY :
+            if type == EV_KEY:
                 if code == self.SWITCH_KEY:
                     self.switchMode() if value == UP else None  # switch键放开 切换模式
                 else:
@@ -502,21 +526,22 @@ class eventHandeler:
                 abs_x = value if code == REL_X else abs_x
                 abs_y = value if code == REL_Y else abs_y
                 mwheelx = value if code == REL_WHEEL else mwheelx
-                mwheely = value if code == REL_HWHEEL else mwheely    
-        
+                mwheely = value if code == REL_HWHEEL else mwheely
+
         mouseMovd = abs_x != 0 or abs_y != 0
         mouseWheelMoved = mwheelx != 0 or mwheely != 0
-        
+
         if self.mapMode == True:
             if mouseMovd:
                 self.handelMouseMoveAction(offsetX=abs_x, offsetY=abs_y)
             if mouseWheelMoved:
+
                 def quickClick():
                     wh_name = {
-                        "1_0":"WH_LEFT",
-                        "1_2":"WH_RIGHT",
-                        "0_1":"WH_DOWN",
-                        "2_1":"WH_UP",
+                        "1_0": "WH_LEFT",
+                        "1_2": "WH_RIGHT",
+                        "0_1": "WH_DOWN",
+                        "2_1": "WH_UP",
                     }[f"{mwheelx+1}_{mwheely+1}"]
                     if wh_name in self.keyMap:
                         self.handelKeyAction(wh_name, DOWN)
@@ -524,6 +549,7 @@ class eventHandeler:
                         self.handelKeyAction(wh_name, UP)
                     else:
                         print("WHEEL_CODE = ", wh_name, " not in keyMap")
+
                 threading.Thread(target=quickClick).start()
         else:
             if mouseMovd:
@@ -532,7 +558,6 @@ class eventHandeler:
                 self.postVirtualDev("wheel", mwheelx, mwheely)
 
         return self.exit_flag
-
 
     def postVirtualDev(self, type, arg1, arg2):
         if type == "mouse":
@@ -548,7 +573,6 @@ class eventHandeler:
                     self.virtualDev.post_key_event(code, arg2)
         elif type == "wheel":
             self.virtualDev.post_wheel_event(arg1, arg2)
-
 
     def handelJSEvents(self, events):
         def handelJSBTNAction(key, updown):
@@ -569,34 +593,28 @@ class eventHandeler:
 
         def handelABSAction(name, value):
             if name in ["LS_X", "LS_Y"]:  # LS事件
+                ls_dz = self.jsInfo["DEADZONE"]["LS"]
                 self.abs_last[name] = value
                 if self.mapMode == True:
                     ls_dz = self.jsInfo["DEADZONE"]["LS"]
-                    if (
-                        ls_dz[0] < (self.abs_last["LS_X"]) < ls_dz[1]
-                        and ls_dz[0] < (self.abs_last["LS_Y"]) < ls_dz[1]
-                    ):
-                        # self.handelWheelMoveAction(type=RELEASE_FLAG)  # 释放过则两个判断后直接返回
+                    (ls_x, ls_y) = self.getStick("LS")
+                    if ls_x == 0.5 and ls_y == 0.5:
                         self.wheel_release[1] = True
                     else:
                         wheelX = self.wheelMap[4][0] + self.wheel_range * 2 * (
-                            self.abs_last["LS_X"] - 0.5
+                            ls_x - 0.5
                         )
                         wheelY = self.wheelMap[4][1] + self.wheel_range * 2 * (
-                            self.abs_last["LS_Y"] - 0.5
+                            ls_y - 0.5
                         )
                         self.wheel_release[1] = False
-                        self.handelWheelMoveAction(targetX=int(wheelY), targetY=int(wheelX))
+                        self.handelWheelMoveAction(
+                            targetX=int(wheelY), targetY=int(wheelX)
+                        )
                 else:
                     pass
             elif name in ["RS_X", "RS_Y"]:
                 self.abs_last[name] = value
-                rs_dz = self.jsInfo["DEADZONE"]["RS"]
-                if (
-                    rs_dz[0] < (self.abs_last["RS_X"]) < rs_dz[1]
-                    and rs_dz[0] < (self.abs_last["RS_Y"]) < rs_dz[1]
-                ):
-                    self.abs_last[name] = 0.5
 
         for (type, code, value) in events:
             if type == EV_ABS:
@@ -634,6 +652,7 @@ class eventHandeler:
                     handelJSBTNAction(name, value)
         return self.exit_flag
 
+
 InterruptedFlag = False
 
 
@@ -644,7 +663,6 @@ def devReader(path="", handeler=None):
     mode:运行标志 模式 直接传递给事件处理器
     switchMode:切换模式函数
     返回 thread 外部join()"""
-    print("开始读取设备", path)
 
     def readFunc():
         with open(path, "rb") as f:
@@ -671,26 +689,28 @@ def devReader(path="", handeler=None):
     return thread
 
 
-def mainLoop(paths, handelerInstance):
+def mainLoop(mouseEventPath = None,keyboardEventPath = None ,jsEventPath = None, handelerInstance = None):
+    if handelerInstance == None:
+        return
     threads = []
-    if "js" in paths:
-        jsEventPath = paths["js"]
+    if jsEventPath != None:
+        print("启用手柄 {}".format(jsEventPath))
         threads.append(
             devReader(
                 jsEventPath,
                 handelerInstance.handelJSEvents,
             )
         )
-    if "kb" in paths:
-        keyboardEvenPath = paths["kb"]
+    if keyboardEventPath != None:
+        print("启用键盘 {}".format(keyboardEventPath))
         threads.append(
             devReader(
-                keyboardEvenPath,
+                keyboardEventPath,
                 handelerInstance.handelEvents,
             )
         )
-    if "mouse" in paths:
-        mouseEventPath = paths["mouse"]
+    if mouseEventPath != None:
+        print("启用鼠标 {}".format(mouseEventPath))
         threads.append(
             devReader(
                 mouseEventPath,
@@ -700,168 +720,148 @@ def mainLoop(paths, handelerInstance):
     [readerThread.join() for readerThread in threads]
 
 
-
-
-class virtualDev():
+class virtualDev:
     def __init__(self) -> None:
         self.uinput = UInput()
         for keyname in LINUX_KEYS:
             self.uinput.set_keybit(LINUX_KEYS[keyname])
-        
+
         self.uinput.set_relbit(0x00)
-        self.uinput.set_relbit(0X01)
-        self.uinput.set_relbit(0X02)
-        self.uinput.set_relbit(0X06)
-        self.uinput.set_relbit(0X08)
-
-        self.uinput.dev_setup(0, 0, 0, 0, 'fake keyboard device', 0)
+        self.uinput.set_relbit(0x01)
+        self.uinput.set_relbit(0x02)
+        self.uinput.set_relbit(0x06)
+        self.uinput.set_relbit(0x08)
+        self.uinput.dev_setup(0, 0, 0, 0, "fake keyboard device", 0)
         self.uinput.create_dev()
-        print('Device name: {}'.format(self.uinput.get_sysname(65)))
-    
-    def post_key_event(self,code,updown):
-        self.uinput.send_event(None,0x01,code,updown)
-        self.uinput.send_event(None,0x00,0,0)
 
-    def post_mouse_event(self,x,y):
-        self.uinput.send_event(None,0X02,0X00,x) if x!= 0 else None
-        self.uinput.send_event(None,0X02,0X01,y) if y!= 0 else None
-        self.uinput.send_event(None,0x00,0,0)
+    def post_key_event(self, code, updown):
+        self.uinput.send_event(None, 0x01, code, updown)
+        self.uinput.send_event(None, 0x00, 0, 0)
 
-    def post_wheel_event(self,x,y):
-        self.uinput.send_event(None,0x02,0x08,x) if x!= 0 else None
-        self.uinput.send_event(None,0x02,0x06,y) if y!= 0 else None
-        self.uinput.send_event(None,0x00,0,0)
-        self.uinput.send_event(None,0x00,0,0)
+    def post_mouse_event(self, x, y):
+        self.uinput.send_event(None, 0x02, 0x00, x) if x != 0 else None
+        self.uinput.send_event(None, 0x02, 0x01, y) if y != 0 else None
+        self.uinput.send_event(None, 0x00, 0, 0)
+
+    def post_wheel_event(self, x, y):
+        self.uinput.send_event(None, 0x02, 0x08, x) if x != 0 else None
+        self.uinput.send_event(None, 0x02, 0x06, y) if y != 0 else None
+        self.uinput.send_event(None, 0x00, 0, 0)
+        self.uinput.send_event(None, 0x00, 0, 0)
 
 
 if __name__ == "__main__":
-
-
-
     if os.geteuid() != 0:
         print("请以root权限运行")
         exit(1)
 
-    if len(sys.argv) != 5:
-        print("args error!")
+    if len(sys.argv) != 6:
+        print("args error! , except 6 got {}".format(len(sys.argv)))
         exit(2)
 
-    if sys.argv[1] == "js":  # 这种方式只是暂时的 最终实现的是所有设备都可以同时使用
-        touchEventPath = "/dev/input/event{}".format(sys.argv[2])
-        jsEventPath = "/dev/input/event{}".format(sys.argv[3])
-        configFilPath = sys.argv[4]
-        if not os.path.exists(configFilPath):
-            print("config file error!")
-            exit()
-        map_config = json.load(open(configFilPath, "r", encoding="UTF-8"))
-        ds5Config = {
-            "DEADZONE": {
-                "LS": [0.5 - 0.1, 0.5 + 0.1],
-                "RS": [0.5 - 0.015, 0.5 + 0.015],
-            },
-            "ABS": {
-                0: {
-                    "name": "LS_X",
-                    "range": [0, 255],
-                    "reverse": False,
-                },
-                1: {
-                    "name": "LS_Y",
-                    "range": [0, 255],
-                    "reverse": True,
-                },
-                2: {
-                    "name": "RS_X",
-                    "range": [0, 255],
-                    "reverse": False,
-                },
-                5: {
-                    "name": "RS_Y",
-                    "range": [0, 255],
-                    "reverse": False,
-                },
-                3: {
-                    "name": "LT",
-                    "range": [0, 255],
-                    "reverse": False,
-                },
-                4: {
-                    "name": "RT",
-                    "range": [0, 255],
-                    "reverse": False,
-                },
-                16: {
-                    "name": "HAT0X",
-                    "range": [-1, 1],
-                    "reverse": False,
-                },
-                17: {
-                    "name": "HAT0Y",
-                    "range": [-1, 1],
-                    "reverse": False,
-                },
-            },
-            "BTN": {
-                305: {"name": "BTN_A"},
-                306: {"name": "BTN_B"},
-                304: {"name": "BTN_X"},
-                307: {"name": "BTN_Y"},
-                312: {"name": "BTN_SELECT"},
-                313: {"name": "BTN_START"},
-                316: {"name": "BTN_HOME"},
-                308: {"name": "BTN_LB"},
-                309: {"name": "BTN_RB"},
-                314: {"name": "BTN_LS"},
-                315: {"name": "BTN_RS"},
-                317: {"name": "BTN_THUMBL"},
-            },
-            "MAP_KEYBOARD":{
-                "BTN_LT_2":"BTN_LEFT",
-                "BTN_RT_2":"BTN_RIGHT",
-            }
-        }
 
-        touchControlInstance = touchController(touchEventPath)
-        handelerInstance = eventHandeler(
-            map_config, touchControlInstance, jsInfo=ds5Config,virtualDev=virtualDev()
+    touchIndex = int(sys.argv[1])
+    mouseIndex = int(sys.argv[2])
+    keyboardIndex = int(sys.argv[3])
+    joyStickIndex = int(sys.argv[4])
+    configFilePath = sys.argv[5]
+
+    touchEventPath = "/dev/input/event{}".format(touchIndex)
+
+    if not os.path.exists(configFilePath):
+        print("config file error!")
+        exit(3)
+    map_config = json.load(open(configFilePath, "r", encoding="UTF-8"))
+
+    mouseEventPath = None if mouseIndex <= 0 else "/dev/input/event{}".format(mouseIndex)
+    keyboardEventPath = None if keyboardIndex <= 0 else "/dev/input/event{}".format(keyboardIndex)
+    jsEventPath = None if joyStickIndex <= 0 else "/dev/input/event{}".format(joyStickIndex)
+
+    ds5Config = {
+        "DEADZONE": {
+            "LS": [0.5 - 0.1, 0.5 + 0.1],
+            "RS": [0.5 - 0.04, 0.5 + 0.04],
+        },
+        "ABS": {
+            0: {
+                "name": "LS_X",
+                "range": [0, 255],
+                "reverse": False,
+            },
+            1: {
+                "name": "LS_Y",
+                "range": [0, 255],
+                "reverse": True,
+            },
+            2: {
+                "name": "RS_X",
+                "range": [0, 255],
+                "reverse": False,
+            },
+            5: {
+                "name": "RS_Y",
+                "range": [0, 255],
+                "reverse": False,
+            },
+            3: {
+                "name": "LT",
+                "range": [0, 255],
+                "reverse": False,
+            },
+            4: {
+                "name": "RT",
+                "range": [0, 255],
+                "reverse": False,
+            },
+            16: {
+                "name": "HAT0X",
+                "range": [-1, 1],
+                "reverse": False,
+            },
+            17: {
+                "name": "HAT0Y",
+                "range": [-1, 1],
+                "reverse": False,
+            },
+        },
+        "BTN": {
+            305: {"name": "BTN_A"},
+            306: {"name": "BTN_B"},
+            304: {"name": "BTN_X"},
+            307: {"name": "BTN_Y"},
+            312: {"name": "BTN_SELECT"},
+            313: {"name": "BTN_START"},
+            316: {"name": "BTN_HOME"},
+            308: {"name": "BTN_LB"},
+            309: {"name": "BTN_RB"},
+            314: {"name": "BTN_LS"},
+            315: {"name": "BTN_RS"},
+            317: {"name": "BTN_THUMBL"},
+        },
+        "MAP_KEYBOARD": {
+            "BTN_LT_2": "BTN_RIGHT",
+            "BTN_RT_2": "BTN_LEFT",
+            "BTN_DPAD_UP": "KEY_UP",
+            "BTN_DPAD_LEFT": "KEY_LEFT",
+            "BTN_DPAD_RIGHT": "KEY_RIGHT",
+            "BTN_DPAD_DOWN": "KEY_DOWN",
+            "BTN_A": "KEY_ENTER",
+            "BTN_B": "KEY_BACK",
+            "BTN_SELECT": "KEY_COMPOSE",
+            "BTN_THUMBL": "KEY_HOME",
+        },
+    }
+
+    touchControlInstance = touchController(touchEventPath)
+    handelerInstance = eventHandeler(map_config, touchControlInstance, jsInfo=ds5Config, virtualDev=virtualDev())
+    try:
+        mainLoop(
+            mouseEventPath = mouseEventPath,
+            keyboardEventPath = keyboardEventPath,
+            jsEventPath = jsEventPath,
+            handelerInstance = handelerInstance,
         )
-        # jsnoexclusiveMode(jsEventPath, handelerInstance)
-        try:
-            mainLoop(
-            {
-                "js": jsEventPath,
-                "mouse": "/dev/input/event13",
-                "kb": "/dev/input/event14",
-            }, handelerInstance)
-        except KeyboardInterrupt:
-            handelerInstance.destroy()
-            print("程序将在下次事件完成后退出")
-
-    else:
-        touchEventPath = "/dev/input/event{}".format(sys.argv[1])
-        mouseEventPath = "/dev/input/event{}".format(sys.argv[2])
-        keyboardEvenPath = "/dev/input/event{}".format(sys.argv[3])
-        configFilPath = sys.argv[4]
-
-        if not os.path.exists(configFilPath):
-            print("config file error!")
-            exit()
-
-        map_config = json.load(open(configFilPath, "r", encoding="UTF-8"))
-
-        touchControlInstance = touchController(touchEventPath)
-        handelerInstance = eventHandeler(map_config, touchControlInstance)
-        mainLoop({"mouse": mouseEventPath,"kb":keyboardEvenPath}, handelerInstance)
-
-# ==============================================================================
-# TO DO
-# 重写调用方式 支持多个设备同时调用
-#
-# 仅支持一个 手柄 鼠标 键盘
-# 仅存在两种模式
-# 仅支持ctrl+c退出
-#
-# 关于手柄的按键检测 如果能直接用iotcl读取就好了
-# 最不济的情况下 是内置ps4 ps5 xbox 的配置文件 然后提供对用户接口 再提供一个小工具创建手柄配置文件
-# ......
-# ==============================================================================
+    except KeyboardInterrupt:
+        handelerInstance.destroy()
+        print("程序将在下次事件完成后退出")
+    
