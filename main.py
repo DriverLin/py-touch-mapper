@@ -573,6 +573,7 @@ class eventHandeler:
 
     def handelJSEvents(self, events):
         def handelJSBTNAction(key, updown):
+            # print("handelJSBTNAction", key, updown)
             if key == "BTN_SELECT":
                 self.js_switch_key_down = updown
             if self.js_switch_key_down == DOWN and key == "BTN_RS" and updown == UP:
@@ -589,6 +590,7 @@ class eventHandeler:
                 self.postVirtualDev("btn", key, updown)
 
         def handelABSAction(name, value):
+            # print("handelABSAction", name, value)
             if name in ["LS_X", "LS_Y"]:  # LS事件
                 ls_dz = self.jsInfo["DEADZONE"]["LS"]
                 self.abs_last[name] = value
@@ -615,12 +617,12 @@ class eventHandeler:
 
         for (type, code, value) in events:
             if type == EV_ABS:
-                name = self.jsInfo["ABS"][code]["name"]
-                minVal, maxVal = self.jsInfo["ABS"][code]["range"]
+                name = self.jsInfo["ABS"][str(code)]["name"]
+                minVal, maxVal = self.jsInfo["ABS"][str(code)]["range"]
                 formatedValue = (value - minVal) / (maxVal - minVal)
                 formatedValue = (
                     1 - formatedValue
-                    if self.jsInfo["ABS"][code]["reverse"]
+                    if self.jsInfo["ABS"][str(code)]["reverse"]
                     else formatedValue
                 )
                 if name in LR_RT_VALUEMAP:  # 扳机
@@ -644,8 +646,8 @@ class eventHandeler:
                 else:  # 摇杆
                     handelABSAction(name, formatedValue)
             elif type == EV_KEY:
-                if code in self.jsInfo["BTN"]:
-                    name = self.jsInfo["BTN"][code]
+                if str(code) in self.jsInfo["BTN"]:
+                    name = self.jsInfo["BTN"][str(code)]
                     handelJSBTNAction(name, value)
         return self.exit_flag
 
@@ -686,7 +688,9 @@ def devReader(path="", handeler=None):
     return thread
 
 
-def mainLoop(mouseEventPath = None,keyboardEventPath = None ,jsEventPath = None, handelerInstance = None):
+def mainLoop(
+    mouseEventPath=None, keyboardEventPath=None, jsEventPath=None, handelerInstance=None
+):
     if handelerInstance == None:
         return
     threads = []
@@ -752,8 +756,6 @@ def joyStickchecker(events):
     print("joyStickchecker", events)
 
 
-
-
 if __name__ == "__main__":
 
     # print("twst=================")
@@ -765,7 +767,6 @@ if __name__ == "__main__":
     #     print(r, absinfo.minimum, absinfo.maximum, absinfo.fuzz, absinfo.flat)
     # exit(0)
 
-
     if os.geteuid() != 0:
         print("请以root权限运行")
         exit(1)
@@ -773,7 +774,6 @@ if __name__ == "__main__":
     if len(sys.argv) != 6:
         print("args error! , except 6 got {}".format(len(sys.argv)))
         exit(2)
-
 
     touchIndex = int(sys.argv[1])
     mouseIndex = int(sys.argv[2])
@@ -788,9 +788,15 @@ if __name__ == "__main__":
         exit(3)
     map_config = json.load(open(configFilePath, "r", encoding="UTF-8"))
 
-    mouseEventPath = None if mouseIndex <= 0 else "/dev/input/event{}".format(mouseIndex)
-    keyboardEventPath = None if keyboardIndex <= 0 else "/dev/input/event{}".format(keyboardIndex)
-    jsEventPath = None if joyStickIndex <= 0 else "/dev/input/event{}".format(joyStickIndex)
+    mouseEventPath = (
+        None if mouseIndex <= 0 else "/dev/input/event{}".format(mouseIndex)
+    )
+    keyboardEventPath = (
+        None if keyboardIndex <= 0 else "/dev/input/event{}".format(keyboardIndex)
+    )
+    jsEventPath = (
+        None if joyStickIndex <= 0 else "/dev/input/event{}".format(joyStickIndex)
+    )
 
     ds5Config = {
         "DEADZONE": {
@@ -798,60 +804,99 @@ if __name__ == "__main__":
             "RS": [0.5 - 0.04, 0.5 + 0.04],
         },
         "ABS": {
-            0: {
+            "0": {
                 "name": "LS_X",
                 "range": [0, 255],
                 "reverse": False,
             },
-            1: {
+            "1": {
                 "name": "LS_Y",
                 "range": [0, 255],
                 "reverse": False,
             },
-            2: {
+            "2": {
                 "name": "RS_X",
                 "range": [0, 255],
                 "reverse": False,
             },
-            5: {
+            "5": {
                 "name": "RS_Y",
                 "range": [0, 255],
                 "reverse": False,
             },
-            3: {
+            "3": {
                 "name": "LT",
                 "range": [0, 255],
                 "reverse": False,
             },
-            4: {
+            "4": {
                 "name": "RT",
                 "range": [0, 255],
                 "reverse": False,
             },
-            16: {
+            "16": {
                 "name": "HAT0X",
                 "range": [-1, 1],
                 "reverse": False,
             },
-            17: {
+            "17": {
                 "name": "HAT0Y",
                 "range": [-1, 1],
                 "reverse": False,
             },
         },
         "BTN": {
-            305:  "BTN_A",
-            306:  "BTN_B",
-            304:  "BTN_X",
-            307:  "BTN_Y",
-            312:  "BTN_SELECT",
-            313:  "BTN_START",
-            316:  "BTN_HOME",
-            308:  "BTN_LB",
-            309:  "BTN_RB",
-            314:  "BTN_LS",
-            315:  "BTN_RS",
-            317:  "BTN_THUMBL",
+            "305": "BTN_A",
+            "306": "BTN_B",
+            "304": "BTN_X",
+            "307": "BTN_Y",
+            "312": "BTN_SELECT",
+            "313": "BTN_START",
+            "316": "BTN_HOME",
+            "308": "BTN_LB",
+            "309": "BTN_RB",
+            "314": "BTN_LS",
+            "315": "BTN_RS",
+            "317": "BTN_THUMBL",
+        },
+        "MAP_KEYBOARD": {
+            "BTN_LT_2": "BTN_RIGHT",
+            "BTN_RT_2": "BTN_LEFT",
+            "BTN_DPAD_UP": "KEY_UP",
+            "BTN_DPAD_LEFT": "KEY_LEFT",
+            "BTN_DPAD_RIGHT": "KEY_RIGHT",
+            "BTN_DPAD_DOWN": "KEY_DOWN",
+            "BTN_A": "KEY_ENTER",
+            "BTN_B": "KEY_BACK",
+            "BTN_SELECT": "KEY_COMPOSE",
+            "BTN_THUMBL": "KEY_HOME",
+        },
+    }
+
+    xboxConfig = {
+        "DEADZONE": {"LS": [0.4, 0.6], "RS": [0.46, 0.54]},
+        "ABS": {
+            "17": {"name": "HAT0Y", "range": [-1, 1], "reverse": False},
+            "16": {"name": "HAT0X", "range": [-1, 1], "reverse": False},
+            "0": {"name": "LS_X", "range": [0, 65535], "reverse": False},
+            "1": {"name": "LS_Y", "range": [0, 65535], "reverse": False},
+            "10": {"name": "LT", "range": [0, 1023], "reverse": False},
+            "9": {"name": "RT", "range": [0, 1023], "reverse": False},
+            "2": {"name": "RS_X", "range": [0, 65535], "reverse": False},
+            "5": {"name": "RS_Y", "range": [0, 65535], "reverse": False},
+        },
+        "BTN": {
+            "304": "BTN_A",
+            "305": "BTN_B",
+            "307": "BTN_X",
+            "308": "BTN_Y",
+            "317": "BTN_LS",
+            "318": "BTN_RS",
+            "310": "BTN_LB",
+            "311": "BTN_RB",
+            "158": "BTN_SELECT",
+            "315": "BTN_START",
+            "172": "BTN_HOME",
         },
         "MAP_KEYBOARD": {
             "BTN_LT_2": "BTN_RIGHT",
@@ -868,15 +913,16 @@ if __name__ == "__main__":
     }
 
     touchControlInstance = touchController(touchEventPath)
-    handelerInstance = eventHandeler(map_config, touchControlInstance, jsInfo=ds5Config, virtualDev=virtualDev())
+    handelerInstance = eventHandeler(
+        map_config, touchControlInstance, jsInfo=xboxConfig, virtualDev=virtualDev()
+    )
     try:
         mainLoop(
-            mouseEventPath = mouseEventPath,
-            keyboardEventPath = keyboardEventPath,
-            jsEventPath = jsEventPath,
-            handelerInstance = handelerInstance,
+            mouseEventPath=mouseEventPath,
+            keyboardEventPath=keyboardEventPath,
+            jsEventPath=jsEventPath,
+            handelerInstance=handelerInstance,
         )
     except KeyboardInterrupt:
         handelerInstance.destroy()
         print("程序将在下次事件完成后退出")
-    

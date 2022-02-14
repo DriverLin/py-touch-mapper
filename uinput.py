@@ -91,9 +91,9 @@ class UInput:
     def destroy_dev(self):
         ioctl(self._fd, UI_DEV_DESTROY, 0)
 
-    def get_sysname(self, n):
-        buf = bytearray(n)
-        ioctl(self._fd, UI_GET_SYSNAME(n), buf)
+    def get_sysname(self):
+        buf = bytearray(65)
+        ioctl(self._fd, UI_GET_SYSNAME(65), buf)
         return buf.rstrip(b'\x00').decode()
 
     def send_event(self, time, type, code, value):
