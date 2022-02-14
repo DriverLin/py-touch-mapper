@@ -36,6 +36,8 @@ EV_REL = 0x02
 EV_ABS = 0x03
 REL_X = 0x00
 REL_Y = 0x01
+REL_WHEEL = 0x08
+REL_HWHEEL = 0x06
 
 SYN_REPORT = 0x00
 
@@ -159,12 +161,8 @@ global_exclusive_flag = False
 def translate_keyname_keycode(keyname):
     if keyname in LINUX_KEYS:  # 在映射列表中的
         return LINUX_KEYS[keyname]
-    elif keyname.startswith("BTN_"):  # 不在映射列表中 且以BTN_开头 视为手柄按键映射 直接用name作为keycode
-        return keyname
     else:
-        print("ERROR KEYNAME ", keyname)
-        return 0
-
+        return keyname
 
 class eventHandeler:
     def __init__(
@@ -482,6 +480,7 @@ class eventHandeler:
 
         =========================================="""
         abs_x, abs_y = 0, 0
+        mwheelx, mwheely = 0, 0
         for (type, code, value) in events:
             if type == EV_KEY :
                 if code == self.SWITCH_KEY:
@@ -502,12 +501,35 @@ class eventHandeler:
             elif type == EV_REL:
                 abs_x = value if code == REL_X else abs_x
                 abs_y = value if code == REL_Y else abs_y
-           
-        if abs_x != 0 or abs_y != 0:  # 如果x或y坐标不为0 处理鼠标事件
-            if self.mapMode == True:
+                mwheelx = value if code == REL_WHEEL else mwheelx
+                mwheely = value if code == REL_HWHEEL else mwheely    
+        
+        mouseMovd = abs_x != 0 or abs_y != 0
+        mouseWheelMoved = mwheelx != 0 or mwheely != 0
+        
+        if self.mapMode == True:
+            if mouseMovd:
                 self.handelMouseMoveAction(offsetX=abs_x, offsetY=abs_y)
-            else:
+            if mouseWheelMoved:
+                def quickClick():
+                    wh_name = {
+                        "1_0":"WH_LEFT",
+                        "1_2":"WH_RIGHT",
+                        "0_1":"WH_DOWN",
+                        "2_1":"WH_UP",
+                    }[f"{mwheelx+1}_{mwheely+1}"]
+                    if wh_name in self.keyMap:
+                        self.handelKeyAction(wh_name, DOWN)
+                        time.sleep(0.01)
+                        self.handelKeyAction(wh_name, UP)
+                    else:
+                        print("WHEEL_CODE = ", wh_name, " not in keyMap")
+                threading.Thread(target=quickClick).start()
+        else:
+            if mouseMovd:
                 self.postVirtualDev("mouse", abs_x, abs_y)
+            if mouseWheelMoved:
+                self.postVirtualDev("wheel", mwheelx, mwheely)
 
         return self.exit_flag
 
@@ -524,6 +546,9 @@ class eventHandeler:
                 if mapedKey in LINUX_KEYS:
                     code = LINUX_KEYS[mapedKey]
                     self.virtualDev.post_key_event(code, arg2)
+        elif type == "wheel":
+            self.virtualDev.post_wheel_event(arg1, arg2)
+
 
     def handelJSEvents(self, events):
         def handelJSBTNAction(key, updown):
@@ -686,6 +711,8 @@ class virtualDev():
         self.uinput.set_relbit(0x00)
         self.uinput.set_relbit(0X01)
         self.uinput.set_relbit(0X02)
+        self.uinput.set_relbit(0X06)
+        self.uinput.set_relbit(0X08)
 
         self.uinput.dev_setup(0, 0, 0, 0, 'fake keyboard device', 0)
         self.uinput.create_dev()
@@ -696,9 +723,16 @@ class virtualDev():
         self.uinput.send_event(None,0x00,0,0)
 
     def post_mouse_event(self,x,y):
-        self.uinput.send_event(None,0X02,0X00,x)
-        self.uinput.send_event(None,0X02,0X01,y)
+        self.uinput.send_event(None,0X02,0X00,x) if x!= 0 else None
+        self.uinput.send_event(None,0X02,0X01,y) if y!= 0 else None
         self.uinput.send_event(None,0x00,0,0)
+
+    def post_wheel_event(self,x,y):
+        self.uinput.send_event(None,0x02,0x08,x) if x!= 0 else None
+        self.uinput.send_event(None,0x02,0x06,y) if y!= 0 else None
+        self.uinput.send_event(None,0x00,0,0)
+        self.uinput.send_event(None,0x00,0,0)
+
 
 if __name__ == "__main__":
 
