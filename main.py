@@ -48,10 +48,7 @@ EVENT_FORMAT = "llHHI"
 EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
 
 SYN_EVENT = eventPacker(EV_SYN, SYN_REPORT, 0x0)
-EVIOCGNAME = lambda len: ioctl_opt.IOC(ioctl_opt.IOC_READ, ord("E"), 0x06, len)
 EVIOCGRAB = lambda len: ioctl_opt.IOW(ord("E"), 0x90, ctypes.c_int)
-EVIOCGABS = lambda axis : ioctl_opt.IOR(ord('E'), 0x40 + axis, "ffffff")
-
 HAT_D_U = {
     "0.5_1.0": (1, DOWN),
     "0.5_0.0": (0, DOWN),
@@ -312,7 +309,7 @@ class eventHandeler:
                         time.sleep(0.1)
                     else:
                         value = 1 if stickValue > 0.5 else -1
-                        x_y = [value, 0] if targetStick == "LS_Y" else [0, value]
+                        x_y = [-1 * value, 0] if targetStick == "LS_Y" else [0, value]
                         # print(targetStick, value,x_y)
                         self.postVirtualDev("wheel", x_y[0], x_y[1])
                         time.sleep((1 - abs(stickValue - 0.5) * 2) * 0.95 + 0.05)
@@ -604,7 +601,7 @@ class eventHandeler:
                         wheelX = self.wheelMap[4][0] + self.wheel_range * 2 * (
                             ls_x - 0.5
                         )
-                        wheelY = self.wheelMap[4][1] + self.wheel_range * 2 * (
+                        wheelY = self.wheelMap[4][1] - self.wheel_range * 2 * (
                             ls_y - 0.5
                         )
                         self.wheel_release[1] = False
@@ -648,7 +645,7 @@ class eventHandeler:
                     handelABSAction(name, formatedValue)
             elif type == EV_KEY:
                 if code in self.jsInfo["BTN"]:
-                    name = self.jsInfo["BTN"][code]["name"]
+                    name = self.jsInfo["BTN"][code]
                     handelJSBTNAction(name, value)
         return self.exit_flag
 
@@ -699,6 +696,7 @@ def mainLoop(mouseEventPath = None,keyboardEventPath = None ,jsEventPath = None,
             devReader(
                 jsEventPath,
                 handelerInstance.handelJSEvents,
+                # joyStickchecker
             )
         )
     if keyboardEventPath != None:
@@ -750,7 +748,24 @@ class virtualDev:
         self.uinput.send_event(None, 0x00, 0, 0)
 
 
+def joyStickchecker(events):
+    print("joyStickchecker", events)
+
+
+
+
 if __name__ == "__main__":
+
+    # print("twst=================")
+
+    # f = open("/dev/input/event15", "rb")
+    # for i in range(9):
+    #     r, absinfo = get_absinfo(f,i)
+    #     #最小 最大 干扰值 平衡位置
+    #     print(r, absinfo.minimum, absinfo.maximum, absinfo.fuzz, absinfo.flat)
+    # exit(0)
+
+
     if os.geteuid() != 0:
         print("请以root权限运行")
         exit(1)
@@ -791,7 +806,7 @@ if __name__ == "__main__":
             1: {
                 "name": "LS_Y",
                 "range": [0, 255],
-                "reverse": True,
+                "reverse": False,
             },
             2: {
                 "name": "RS_X",
@@ -825,18 +840,18 @@ if __name__ == "__main__":
             },
         },
         "BTN": {
-            305: {"name": "BTN_A"},
-            306: {"name": "BTN_B"},
-            304: {"name": "BTN_X"},
-            307: {"name": "BTN_Y"},
-            312: {"name": "BTN_SELECT"},
-            313: {"name": "BTN_START"},
-            316: {"name": "BTN_HOME"},
-            308: {"name": "BTN_LB"},
-            309: {"name": "BTN_RB"},
-            314: {"name": "BTN_LS"},
-            315: {"name": "BTN_RS"},
-            317: {"name": "BTN_THUMBL"},
+            305:  "BTN_A",
+            306:  "BTN_B",
+            304:  "BTN_X",
+            307:  "BTN_Y",
+            312:  "BTN_SELECT",
+            313:  "BTN_START",
+            316:  "BTN_HOME",
+            308:  "BTN_LB",
+            309:  "BTN_RB",
+            314:  "BTN_LS",
+            315:  "BTN_RS",
+            317:  "BTN_THUMBL",
         },
         "MAP_KEYBOARD": {
             "BTN_LT_2": "BTN_RIGHT",
