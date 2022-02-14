@@ -10,11 +10,13 @@ import fcntl
 import ioctl_opt
 import random
 
+from uinput import UInput
+from keys import *
+
 eventPacker = lambda e_type, e_code, e_value: struct.pack(
     EVENT_FORMAT, 0, 0, e_type, e_code, e_value
 )
 getRand = lambda: random.randint(0, 20)
-
 
 DOWN = 0x1
 UP = 0x0
@@ -38,9 +40,7 @@ REL_Y = 0x01
 SYN_REPORT = 0x00
 
 BTN_TOUCH = 0x14A
-KEY_GRAVE = 0x29
 BTN_MOUSE = 0x110
-
 
 EVENT_FORMAT = "llHHI"
 EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
@@ -70,106 +70,6 @@ LR_RT_VALUEMAP = {
 
 IN_DEADZONE = -1
 
-keynamemapval = {
-    "KEY_RESERVED": 0,
-    "KEY_ESC": 1,
-    "KEY_1": 2,
-    "KEY_2": 3,
-    "KEY_3": 4,
-    "KEY_4": 5,
-    "KEY_5": 6,
-    "KEY_6": 7,
-    "KEY_7": 8,
-    "KEY_8": 9,
-    "KEY_9": 10,
-    "KEY_0": 11,
-    "KEY_MINUS": 12,
-    "KEY_EQUAL": 13,
-    "KEY_BACKSPACE": 14,
-    "KEY_TAB": 15,
-    "KEY_Q": 16,
-    "KEY_W": 17,
-    "KEY_E": 18,
-    "KEY_R": 19,
-    "KEY_T": 20,
-    "KEY_Y": 21,
-    "KEY_U": 22,
-    "KEY_I": 23,
-    "KEY_O": 24,
-    "KEY_P": 25,
-    "KEY_LEFTBRACE": 26,
-    "KEY_RIGHTBRACE": 27,
-    "KEY_ENTER": 28,
-    "KEY_LEFTCTRL": 29,
-    "KEY_A": 30,
-    "KEY_S": 31,
-    "KEY_D": 32,
-    "KEY_F": 33,
-    "KEY_G": 34,
-    "KEY_H": 35,
-    "KEY_J": 36,
-    "KEY_K": 37,
-    "KEY_L": 38,
-    "KEY_SEMICOLON": 39,
-    "KEY_APOSTROPHE": 40,
-    "KEY_GRAVE": 41,
-    "KEY_LEFTSHIFT": 42,
-    "KEY_BACKSLASH": 43,
-    "KEY_Z": 44,
-    "KEY_X": 45,
-    "KEY_C": 46,
-    "KEY_V": 47,
-    "KEY_B": 48,
-    "KEY_N": 49,
-    "KEY_M": 50,
-    "KEY_COMMA": 51,
-    "KEY_DOT": 52,
-    "KEY_SLASH": 53,
-    "KEY_RIGHTSHIFT": 54,
-    "KEY_KPASTERISK": 55,
-    "KEY_LEFTALT": 56,
-    "KEY_SPACE": 57,
-    "KEY_CAPSLOCK": 58,
-    "KEY_F1": 59,
-    "KEY_F2": 60,
-    "KEY_F3": 61,
-    "KEY_F4": 62,
-    "KEY_F5": 63,
-    "KEY_F6": 64,
-    "KEY_F7": 65,
-    "KEY_F8": 66,
-    "KEY_F9": 67,
-    "KEY_F10": 68,
-    "KEY_NUMLOCK": 69,
-    "KEY_SCROLLLOCK": 70,
-    "KEY_F11": 87,
-    "KEY_F12": 88,
-    "KEY_HOME": 102,
-    "KEY_UP": 103,
-    "KEY_PAGEUP": 104,
-    "KEY_LEFT": 105,
-    "KEY_RIGHT": 106,
-    "KEY_END": 107,
-    "KEY_DOWN": 108,
-    "KEY_PAGEDOWN": 109,
-    "KEY_INSERT": 110,
-    "KEY_DELETE": 111,
-    "BTN_LEFT": 0x110,
-    "BTN_RIGHT": 0x111,
-    "BTN_MIDDLE": 0x112,
-    "BTN_SIDE": 0x113,
-    "BTN_EXTRA": 0x114,
-    "BTN_FORWARD": 0x115,
-    "BTN_BACK": 0x116,
-    "BTN_TASK": 0x117,
-}
-printMap = {
-    0x4: "MOUSE_REQUIRE",
-    0x3: "WHEEL_REQUIRE",
-    0x2: "RELEASE_FLAG",
-    0x1: "REQURIE_FLAG",
-    0x0: "MOVE_FLAG",
-}
 
 
 class touchController:
@@ -242,13 +142,13 @@ class touchController:
 
             self.fp.write(eventPacker(EV_ABS, ABS_MT_SLOT, trueId))
             self.fp.write(eventPacker(EV_ABS, ABS_MT_TRACKING_ID, trueId))
-            if self.allocatedID_num == 1:
-                self.fp.write(eventPacker(EV_KEY, BTN_TOUCH, DOWN))
+            self.fp.write(
+                eventPacker(EV_KEY, BTN_TOUCH, DOWN)
+            ) if self.allocatedID_num == 1 else None
             self.fp.write(eventPacker(EV_ABS, ABS_MT_POSITION_X, x & 0xFFFFFFFF))
             self.fp.write(eventPacker(EV_ABS, ABS_MT_POSITION_Y, y & 0xFFFFFFFF))
             self.fp.write(SYN_EVENT)
             self.fp.flush()
-        # print("(",printMap[type],"\tudi=",uncertainId ,"\t[", x,"," , y,"]" , ") => ",trueId)
         self.lock.release()
         return trueId
 
@@ -257,9 +157,9 @@ global_exclusive_flag = False
 
 
 def translate_keyname_keycode(keyname):
-    if keyname in keynamemapval:#在映射列表中的
-        return keynamemapval[keyname]
-    elif keyname.startswith("BTN_"):#不在映射列表中 且以BTN_开头 视为手柄按键映射 直接用name作为keycode
+    if keyname in LINUX_KEYS:  # 在映射列表中的
+        return LINUX_KEYS[keyname]
+    elif keyname.startswith("BTN_"):  # 不在映射列表中 且以BTN_开头 视为手柄按键映射 直接用name作为keycode
         return keyname
     else:
         print("ERROR KEYNAME ", keyname)
@@ -268,8 +168,9 @@ def translate_keyname_keycode(keyname):
 
 class eventHandeler:
     def __init__(
-        self, map_config, touchController, reportRate=250, jsViewRate=250, jsInfo=None
+        self, map_config, touchController, reportRate=250, jsViewRate=250, jsInfo=None,virtualDev=None
     ) -> None:
+        self.virtualDev = virtualDev
         self.jsInfo = jsInfo  # 手柄的配置信息 包含数值范围 按键信息等
         self.abs_last = {
             "HAT0X": 0.5,
@@ -284,6 +185,9 @@ class eventHandeler:
         self.reportRate = 1 / reportRate
         self.jsViewRate = 1 / jsViewRate
         self.js_switch_key_down = UP
+        self.mapMode = (
+            False  # 手柄一直处于独占模式 js_map_mode == False 则模拟键鼠 js_map_mode == True 则映射触屏
+        )
         self.exit_flag = False  # 退出标志 用于停止内部线程
         self.mouseLock = threading.Lock()  # 由于鼠标操作来源不唯一(定时释放和事件驱动的移动)所以需要锁
         self.wheelLock = threading.Lock()  # 左移动摇杆  可以同时用键盘和手柄触发
@@ -328,31 +232,42 @@ class eventHandeler:
 
         # 修改wheelTarget 自动控制移动以及释放
         self.wheel_satuse = [0, 0, 0, 0]
-        self.wheelTarget = (self.wheelMap[4][0], self.wheelMap[4][1])
+        self.wheelTarget = [self.wheelMap[4][0], self.wheelMap[4][1]]
+        self.wheel_release = [True,True] # 确保键鼠自动释放仅释放一次
 
         def wheelThreadFunc():
-            wheelNow = (self.wheelMap[4][0], self.wheelMap[4][1])
+            wheelNow = [self.wheelMap[4][0], self.wheelMap[4][1]]
             while not self.exit_flag:
                 # 等于中心 直接释放
-                if self.wheelTarget == self.wheelMap[4]:
+                if self.wheelTarget == self.wheelMap[4] :
+                    self.wheel_release[0] = True
+
+                else:
+                    self.wheel_release[0] = False
+                    if wheelNow != self.wheelTarget:
+                        restX, restY = (
+                            self.wheelTarget[0] - wheelNow[0],
+                            self.wheelTarget[1] - wheelNow[1],
+                        )
+                        targetX = (
+                            self.wheelTarget[0]
+                            if abs(restX) < 30
+                            else wheelNow[0] + int((10 + getRand()) * restX / abs(restX))
+                        )
+                        targetY = (
+                            self.wheelTarget[1]
+                            if abs(restY) < 30
+                            else wheelNow[1] + int((10 + getRand()) * restY / abs(restY))
+                        )
+                        wheelNow = (targetX, targetY)
+                        pass
+                        self.handelWheelMoveAction(targetX=targetX, targetY=targetY)
+                    else:
+                        pass
+                
+                if self.wheel_release[0] and self.wheel_release[1]:
                     self.handelWheelMoveAction(type=RELEASE_FLAG)
-                elif wheelNow != self.wheelTarget:
-                    restX, restY = (
-                        self.wheelTarget[0] - wheelNow[0],
-                        self.wheelTarget[1] - wheelNow[1],
-                    )
-                    targetX = (
-                        self.wheelTarget[0]
-                        if abs(restX) < 30
-                        else wheelNow[0] + int((10 + getRand()) * restX / abs(restX))
-                    )
-                    targetY = (
-                        self.wheelTarget[1]
-                        if abs(restY) < 30
-                        else wheelNow[1] + int((10 + getRand()) * restY / abs(restY))
-                    )
-                    wheelNow = (targetX, targetY)
-                    self.handelWheelMoveAction(targetX=targetX, targetY=targetY)
+
                 time.sleep(self.reportRate)
 
         def mouseAutoRelease():
@@ -371,15 +286,36 @@ class eventHandeler:
                 else:
                     speedX = (self.abs_last["RS_X"] - 0.5) * 2 * 24
                     speedY = (self.abs_last["RS_Y"] - 0.5) * 2 * 24
-                    self.handelMouseMoveAction(int(speedX), int(speedY))
+                    if self.mapMode == True:# 映射视角
+                        self.handelMouseMoveAction(int(speedX), int(speedY))
+                    else:    # 模拟键鼠
+                        self.postVirtualDev("mouse", int(speedX), int(speedY))
+
+                time.sleep(self.jsViewRate)
+        
+        def lsMoveMouseWheel():
+            while not self.exit_flag:
+                if self.mapMode == True:
+                    pass
+                else:
+                    if self.abs_last["LS_X"] == 0.5 and self.abs_last["LS_Y"] == 0.5:
+                        pass
+                    else:
+                        speedX = (self.abs_last["LS_X"] - 0.5) * 2 * 24
+                        speedY = (self.abs_last["LS_Y"] - 0.5) * 2 * 24
+                        self.handelMouseMoveAction(int(speedX), int(speedY))
                 time.sleep(self.jsViewRate)
 
         threading.Thread(target=wheelThreadFunc).start()
         threading.Thread(target=mouseAutoRelease).start()
         threading.Thread(target=jsMoveView).start()
+        threading.Thread(target=lsMoveMouseWheel).start()
 
     def destroy(self):
         self.exit_flag = True
+
+    def switchMode(self):
+        self.mapMode = not self.mapMode
 
     def handelWheelMoveAction(self, targetX=-1, targetY=-1, type=None):
         if type == None:
@@ -403,10 +339,10 @@ class eventHandeler:
                 self.wheelLock.release()
 
     def handelMouseMoveAction(self, offsetX=0, offsetY=0, type=None):
-        self.mouseLock.acquire()
         if type == None and (offsetX != 0 or offsetY != 0):
             x = offsetX * self.mouseSpeedX
             y = offsetY * self.mouseSpeedY
+            self.mouseLock.acquire()
             self.mouseNotMoveCount = 0
             # 计算映射坐标
             self.realtiveX -= y
@@ -426,10 +362,7 @@ class eventHandeler:
                 self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
                 # 申请触摸ID 随机初始偏移量
                 self.mouseTouchID = self.touchController.postEvent(
-                    MOUSE_REQUIRE,
-                    -1,
-                    self.realtiveX,
-                    self.realtiveY,
+                    MOUSE_REQUIRE, -1, self.realtiveX, self.realtiveY
                 )
                 # 重新计算映射坐标
                 self.realtiveX -= y
@@ -439,10 +372,13 @@ class eventHandeler:
             self.touchController.postEvent(
                 MOVE_FLAG, self.mouseTouchID, self.realtiveX, self.realtiveY
             )
+            self.mouseLock.release()
+
         elif type == RELEASE_FLAG:
+            self.mouseLock.acquire()
             self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
             self.mouseTouchID = -1
-        self.mouseLock.release()
+            self.mouseLock.release()
 
     def handelKeyAction(self, keycode, updown):
         action = self.keyMap[keycode]
@@ -538,113 +474,96 @@ class eventHandeler:
         self.wheelTarget = self.wheelMap[map_value]
 
     def handelEvents(self, events):
-        # 全局变量 是否是映射模式
-        global global_exclusive_flag, InterruptedFlag
-        # x,y 鼠标坐标
-        x, y = 0, 0
+        """=========================================
+
+        events: 事件列表
+        getMode: 获取模式函数 返回当前模式
+        switchMode: 切换模式函数 切换当前模式
+
+        =========================================="""
+        abs_x, abs_y = 0, 0
         for (type, code, value) in events:
-            # 如果是模式切换键释放 则切换模式
-            if type == EV_KEY and code == self.SWITCH_KEY:
-                if value == UP:
-                    self.switch_key_down = False
-                    global_exclusive_flag = not global_exclusive_flag
-                    print("exclusive mode:", global_exclusive_flag)
-                    return
+            if type == EV_KEY :
+                if code == self.SWITCH_KEY:
+                    self.switchMode() if value == UP else None  # switch键放开 切换模式
                 else:
-                    self.switch_key_down = True
-                    return
-
-            # 非独占模式 且 switch按下中 按下esc键 则退出
-            if (
-                self.switch_key_down
-                and global_exclusive_flag == False
-                and type == EV_KEY
-                and code == 1
-                and value == UP
-            ):
-                global_exclusive_flag = not global_exclusive_flag
-                InterruptedFlag = True
-                print("SWITCH_KEY + ESC pressed ,now exit ...")
-                return
-
-            # 当处于映射模式时 处理事件
-            if global_exclusive_flag == True:
-                # 如果是坐标事件 则修改x,y坐标 并在全部事件处理完成后再处理
-                if type == EV_REL:
-                    x = value if code == REL_X else x
-                    y = value if code == REL_Y else y
-                # 如果是按键事件 则立即处理
-                elif type == EV_KEY:
-                    # 如果是方向键 则改变滚轮状态 使用changeWheelStause处理
-                    if code in self.wheel_wasd:
-                        self.changeWheelStause(code, value)
-                    # 如果在映射表中找到了对应的按键 则开一个线程去处理
-                    elif code in self.keyMap:
-                        threading.Thread(
-                            target=self.handelKeyAction,
-                            args=(code, value),
-                        ).start()
-                    # 按键不在映射表中 则输出按键信息
+                    if self.mapMode == True:
+                        if code in self.wheel_wasd:
+                            self.changeWheelStause(code, value)
+                        elif code in self.keyMap:
+                            threading.Thread(
+                                target=self.handelKeyAction,
+                                args=(code, value),
+                            ).start()
+                        else:
+                            print("KEY_CODE = ", code, " not in keyMap")
                     else:
-                        print("KEY_CODE = ", code, " not in keyMap")
+                        self.postVirtualDev("key", code, value)
+            elif type == EV_REL:
+                abs_x = value if code == REL_X else abs_x
+                abs_y = value if code == REL_Y else abs_y
+           
+        if abs_x != 0 or abs_y != 0:  # 如果x或y坐标不为0 处理鼠标事件
+            if self.mapMode == True:
+                self.handelMouseMoveAction(offsetX=abs_x, offsetY=abs_y)
+            else:
+                self.postVirtualDev("mouse", abs_x, abs_y)
 
-        # 如果处于映射模式且x或y坐标不为0  在这里处理鼠标事件
-        if global_exclusive_flag == True and (x != 0 or y != 0):
-            self.handelMouseMoveAction(offsetX=x, offsetY=y)
+        return self.exit_flag
 
-    def handelJSBTNAction(self, key, updown):
-        if key == "BTN_SELECT":
-            self.js_switch_key_down = updown
-        
-        if self.js_switch_key_down == DOWN and key == "BTN_RS":
-            print("switch mode")
-        
-        if key in self.keyMap:
-            threading.Thread(
-                target=self.handelKeyAction,
-                args=(key, updown),
-            ).start()
-        # 按键不在映射表中 则输出按键信息
-        else:
-            print("KEY_CODE = ", key, " not in keyMap")
 
-    def handelABSAction(self, name, value):
-        if name in LR_RT_VALUEMAP:
-            for (keyPoint, keyName) in LR_RT_VALUEMAP[name]:
-                if self.abs_last[name] < keyPoint and value >= keyPoint:
-                    updown = DOWN
-                    self.handelJSBTNAction(keyName, updown)
-                elif self.abs_last[name] >= keyPoint and value < keyPoint:
-                    updown = UP
-                    self.handelJSBTNAction(keyName, updown)
+    def postVirtualDev(self, type, arg1, arg2):
+        if type == "mouse":
+            if arg1 != 0 or arg2 != 0:
+                self.virtualDev.post_mouse_event(arg1, arg2)
+        elif type == "key":
+            self.virtualDev.post_key_event(arg1, arg2)
+        elif type == "btn":
+            if arg1 in self.jsInfo["MAP_KEYBOARD"]:
+                mapedKey = self.jsInfo["MAP_KEYBOARD"][arg1]
+                if mapedKey in LINUX_KEYS:
+                    code = LINUX_KEYS[mapedKey]
+                    self.virtualDev.post_key_event(code, arg2)
+
+    def handelJSEvents(self, events):
+        def handelJSBTNAction(key, updown):
+            if key == "BTN_SELECT":
+                self.js_switch_key_down = updown
+            if self.js_switch_key_down == DOWN and key == "BTN_RS" and updown == UP:
+                self.switchMode()
+            if self.mapMode == True:
+                if key in self.keyMap:
+                    threading.Thread(
+                        target=self.handelKeyAction,
+                        args=(key, updown),
+                    ).start()
+                else:
+                    print("KEY_CODE = ", key, " not in keyMap")
+            else:
+                self.postVirtualDev("btn", key, updown)
+
+        def handelABSAction(name, value):
+            if name in ["LS_X", "LS_Y"]:  # LS事件
+                self.abs_last[name] = value
+                if self.mapMode == True:
+                    ls_dz = self.jsInfo["DEADZONE"]["LS"]
+                    if (
+                        ls_dz[0] < (self.abs_last["LS_X"]) < ls_dz[1]
+                        and ls_dz[0] < (self.abs_last["LS_Y"]) < ls_dz[1]
+                    ):
+                        # self.handelWheelMoveAction(type=RELEASE_FLAG)  # 释放过则两个判断后直接返回
+                        self.wheel_release[1] = True
+                    else:
+                        wheelX = self.wheelMap[4][0] + self.wheel_range * 2 * (
+                            self.abs_last["LS_X"] - 0.5
+                        )
+                        wheelY = self.wheelMap[4][1] + self.wheel_range * 2 * (
+                            self.abs_last["LS_Y"] - 0.5
+                        )
+                        self.wheel_release[1] = False
+                        self.handelWheelMoveAction(targetX=int(wheelY), targetY=int(wheelX))
                 else:
                     pass
-            self.abs_last[name] = value
-        elif name == "HAT0X" or name == "HAT0Y":
-            direction, updown = HAT_D_U[
-                "{:.1f}_{:.1f}".format(self.abs_last[name], value)
-            ]
-            keyName = HAT0_KEYNAME[name][direction]
-            self.abs_last[name] = value
-            self.handelJSBTNAction(keyName, updown)
-        else:
-            assert name in ["LS_X", "LS_Y", "RS_X", "RS_Y"]
-            if name in ["LS_X", "LS_Y"]:
-                self.abs_last[name] = value
-                ls_dz = self.jsInfo["DEADZONE"]["LS"]
-                if (
-                    ls_dz[0] < (self.abs_last["LS_X"]) < ls_dz[1]
-                    and ls_dz[0] < (self.abs_last["LS_Y"]) < ls_dz[1]
-                ):
-                    self.handelWheelMoveAction(type=RELEASE_FLAG)  # 释放过则两个判断后直接返回
-                else:
-                    wheelX = self.wheelMap[4][0] + self.wheel_range * 2 * (
-                        self.abs_last["LS_X"] - 0.5
-                    )
-                    wheelY = self.wheelMap[4][1] + self.wheel_range * 2 * (
-                        self.abs_last["LS_Y"] - 0.5
-                    )
-                    self.handelWheelMoveAction(targetX=int(wheelY), targetY=int(wheelX))
             elif name in ["RS_X", "RS_Y"]:
                 self.abs_last[name] = value
                 rs_dz = self.jsInfo["DEADZONE"]["RS"]
@@ -654,138 +573,144 @@ class eventHandeler:
                 ):
                     self.abs_last[name] = 0.5
 
-    def handelJSEvents(self, events):
         for (type, code, value) in events:
             if type == EV_ABS:
                 name = self.jsInfo["ABS"][code]["name"]
                 minVal, maxVal = self.jsInfo["ABS"][code]["range"]
-                direction = self.jsInfo["ABS"][code]["reverse"]
                 formatedValue = (value - minVal) / (maxVal - minVal)
-                formatedValue = 1 - formatedValue if direction else formatedValue
-                self.handelABSAction(name, formatedValue)
+                formatedValue = (
+                    1 - formatedValue
+                    if self.jsInfo["ABS"][code]["reverse"]
+                    else formatedValue
+                )
+                if name in LR_RT_VALUEMAP:  # 扳机
+                    for (keyPoint, keyName) in LR_RT_VALUEMAP[name]:
+                        if self.abs_last[name] < keyPoint and formatedValue >= keyPoint:
+                            updown = DOWN
+                            handelJSBTNAction(keyName, updown)
+                        elif (
+                            self.abs_last[name] >= keyPoint and formatedValue < keyPoint
+                        ):
+                            updown = UP
+                            handelJSBTNAction(keyName, updown)
+                    self.abs_last[name] = formatedValue
+                elif name == "HAT0X" or name == "HAT0Y":  # DPAD
+                    direction, updown = HAT_D_U[
+                        "{:.1f}_{:.1f}".format(self.abs_last[name], formatedValue)
+                    ]
+                    keyName = HAT0_KEYNAME[name][direction]
+                    self.abs_last[name] = formatedValue
+                    handelJSBTNAction(keyName, updown)
+                else:  # 摇杆
+                    handelABSAction(name, formatedValue)
             elif type == EV_KEY:
                 if code in self.jsInfo["BTN"]:
                     name = self.jsInfo["BTN"][code]["name"]
-                    self.handelJSBTNAction(name, value)
-                # else:
-                #     # print("BTN", code, "not in BTN")
-                #     pass
-
-
-def noexclusiveMode(keyboardEvenPath, handelerInstance):
-    global global_exclusive_flag
-    print("非独占模式")
-    buffer = []
-    with open(keyboardEvenPath, "rb") as f:
-        while not global_exclusive_flag:
-            byte = f.read(EVENT_SIZE)
-            e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
-            # print(e_type, e_code, e_val)
-            if e_type == 0 and e_code == 0 and e_val == 0:
-                handelerInstance.handelEvents(buffer)
-                buffer.clear()
-            else:
-                buffer.append(
-                    (
-                        e_type,
-                        e_code,
-                        e_val if e_val <= 0x7FFFFFFF else e_val - 0x100000000,
-                    )
-                )
-            # handelerInstance.handelEvent(e_type, e_code, e_val)
-    print("退出 非独占模式")
-
-
-def exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance):
-    global global_exclusive_flag
-    print("独占模式")
-
-    def readMouseEvent():
-        buffer = []
-        with open(mouseEventPath, "rb") as f:
-            fcntl.ioctl(f, EVIOCGRAB(1), True)
-            while global_exclusive_flag:
-                byte = f.read(EVENT_SIZE)
-                e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
-
-                if e_type == 0 and e_code == 0 and e_val == 0:
-                    handelerInstance.handelEvents(buffer)
-                    buffer.clear()
-                else:
-                    buffer.append(
-                        (
-                            e_type,
-                            e_code,
-                            e_val if e_val <= 0x7FFFFFFF else e_val - 0x100000000,
-                        )
-                    )
-
-                # handelerInstance.handelEvent(e_type, e_code, e_val)
-
-    def readKeyboardEvent():
-        buffer = []
-        with open(keyboardEvenPath, "rb") as f:
-            fcntl.ioctl(f, EVIOCGRAB(1), True)
-            while global_exclusive_flag:
-                byte = f.read(EVENT_SIZE)
-                e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
-
-                if e_type == 0 and e_code == 0 and e_val == 0:
-                    handelerInstance.handelEvents(buffer)
-                    buffer.clear()
-                else:
-                    buffer.append(
-                        (
-                            e_type,
-                            e_code,
-                            e_val if e_val <= 0x7FFFFFFF else e_val - 0x100000000,
-                        )
-                    )
-
-                # handelerInstance.handelEvent(e_type, e_code, e_val)
-
-    mouseReadingThread = threading.Thread(target=readMouseEvent)
-    keyboardReadingThread = threading.Thread(target=readKeyboardEvent)
-
-    mouseReadingThread.start()
-    keyboardReadingThread.start()
-
-    mouseReadingThread.join()
-    keyboardReadingThread.join()
-
-    print("退出 独占模式")
-
-
-def jsnoexclusiveMode(jsEvenPath, handelerInstance):
-    global global_exclusive_flag
-    print("非独占模式")
-    buffer = []
-    with open(jsEvenPath, "rb") as f:
-        while not global_exclusive_flag:
-            byte = f.read(EVENT_SIZE)
-            e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
-            # print(e_type, e_code, e_val)
-            if e_type == 0 and e_code == 0 and e_val == 0:
-                handelerInstance.handelJSEvents(buffer)
-                buffer.clear()
-            else:
-                buffer.append(
-                    (
-                        e_type,
-                        e_code,
-                        e_val if e_val <= 0x7FFFFFFF else e_val - 0x100000000,
-                    )
-                )
-            # handelerInstance.handelEvent(e_type, e_code, e_val)
-    print("退出 非独占模式")
-
+                    handelJSBTNAction(name, value)
+        return self.exit_flag
 
 InterruptedFlag = False
 
+
+def devReader(path="", handeler=None):
+    """path:设备路径
+    handeler:事件处理器
+    exclusive:是否独占
+    mode:运行标志 模式 直接传递给事件处理器
+    switchMode:切换模式函数
+    返回 thread 外部join()"""
+    print("开始读取设备", path)
+
+    def readFunc():
+        with open(path, "rb") as f:
+            buffer = []
+            fcntl.ioctl(f, EVIOCGRAB(1), True)
+            while True:
+                byte = f.read(EVENT_SIZE)
+                e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
+                if e_type == EV_SYN and e_code == SYN_REPORT and e_val == 0:
+                    if handeler(buffer):
+                        break
+                    buffer.clear()
+                else:
+                    buffer.append(
+                        (
+                            e_type,
+                            e_code,
+                            e_val if e_val <= 0x7FFFFFFF else e_val - 0x100000000,
+                        )
+                    )
+
+    thread = threading.Thread(target=readFunc)
+    thread.start()
+    return thread
+
+
+def mainLoop(paths, handelerInstance):
+    threads = []
+    if "js" in paths:
+        jsEventPath = paths["js"]
+        threads.append(
+            devReader(
+                jsEventPath,
+                handelerInstance.handelJSEvents,
+            )
+        )
+    if "kb" in paths:
+        keyboardEvenPath = paths["kb"]
+        threads.append(
+            devReader(
+                keyboardEvenPath,
+                handelerInstance.handelEvents,
+            )
+        )
+    if "mouse" in paths:
+        mouseEventPath = paths["mouse"]
+        threads.append(
+            devReader(
+                mouseEventPath,
+                handelerInstance.handelEvents,
+            )
+        )
+    [readerThread.join() for readerThread in threads]
+
+
+
+
+class virtualDev():
+    def __init__(self) -> None:
+        self.uinput = UInput()
+        for keyname in LINUX_KEYS:
+            self.uinput.set_keybit(LINUX_KEYS[keyname])
+        
+        self.uinput.set_relbit(0x00)
+        self.uinput.set_relbit(0X01)
+        self.uinput.set_relbit(0X02)
+
+        self.uinput.dev_setup(0, 0, 0, 0, 'fake keyboard device', 0)
+        self.uinput.create_dev()
+        print('Device name: {}'.format(self.uinput.get_sysname(65)))
+    
+    def post_key_event(self,code,updown):
+        self.uinput.send_event(None,0x01,code,updown)
+        self.uinput.send_event(None,0x00,0,0)
+
+    def post_mouse_event(self,x,y):
+        self.uinput.send_event(None,0X02,0X00,x)
+        self.uinput.send_event(None,0X02,0X01,y)
+        self.uinput.send_event(None,0x00,0,0)
+
 if __name__ == "__main__":
+
+
+
+    if os.geteuid() != 0:
+        print("请以root权限运行")
+        exit(1)
+
     if len(sys.argv) != 5:
         print("args error!")
-        exit()
+        exit(2)
 
     if sys.argv[1] == "js":  # 这种方式只是暂时的 最终实现的是所有设备都可以同时使用
         touchEventPath = "/dev/input/event{}".format(sys.argv[2])
@@ -795,16 +720,9 @@ if __name__ == "__main__":
             print("config file error!")
             exit()
         map_config = json.load(open(configFilPath, "r", encoding="UTF-8"))
-
-        # 0 : LS 左->右 0 -> 255
-        # 1 : LS 上->下 0-> 255
-        # 2 : RS 左->右 0 -> 255
-        # 5 : RS 上->下 0->255
-        # 3 : LT 0->255
-        # 4 : RT 0->255
         ds5Config = {
             "DEADZONE": {
-                "LS": [0.5 - 0.08, 0.5 + 0.08],
+                "LS": [0.5 - 0.1, 0.5 + 0.1],
                 "RS": [0.5 - 0.015, 0.5 + 0.015],
             },
             "ABS": {
@@ -863,13 +781,27 @@ if __name__ == "__main__":
                 315: {"name": "BTN_RS"},
                 317: {"name": "BTN_THUMBL"},
             },
+            "MAP_KEYBOARD":{
+                "BTN_LT_2":"BTN_LEFT",
+                "BTN_RT_2":"BTN_RIGHT",
+            }
         }
 
         touchControlInstance = touchController(touchEventPath)
         handelerInstance = eventHandeler(
-            map_config, touchControlInstance, jsInfo=ds5Config
+            map_config, touchControlInstance, jsInfo=ds5Config,virtualDev=virtualDev()
         )
-        jsnoexclusiveMode(jsEventPath, handelerInstance)
+        # jsnoexclusiveMode(jsEventPath, handelerInstance)
+        try:
+            mainLoop(
+            {
+                "js": jsEventPath,
+                "mouse": "/dev/input/event13",
+                "kb": "/dev/input/event14",
+            }, handelerInstance)
+        except KeyboardInterrupt:
+            handelerInstance.destroy()
+            print("程序将在下次事件完成后退出")
 
     else:
         touchEventPath = "/dev/input/event{}".format(sys.argv[1])
@@ -885,33 +817,17 @@ if __name__ == "__main__":
 
         touchControlInstance = touchController(touchEventPath)
         handelerInstance = eventHandeler(map_config, touchControlInstance)
+        mainLoop({"mouse": mouseEventPath,"kb":keyboardEvenPath}, handelerInstance)
 
-        while True:
-            noexclusiveMode(keyboardEvenPath, handelerInstance)
-            if InterruptedFlag == True:
-                handelerInstance.destroy()
-                exit(0)
-            exclusiveMode(keyboardEvenPath, mouseEventPath, handelerInstance)
-
-
-#==============================================================================
-#TO DO
-# 重写调用方式 支持多个设备同时调用 
-# python ./main.py --touch 5 --js 16 17 18 --mouse 19 25 -- keyboard 20 --config ./config.json
-# 快速模式 
-# python ./main.py 5 16 17 config.json
-# python ./main.py js 5 16 config.json
-# python ./main.py full 5 16 17 config.json 
-# 例如可以插入两个鼠标 两个手柄 一个键盘 都可以同时处理 
-# 按键事件重复则丢弃 例如第一个键盘按下A没有释放 则第二个键盘按下A时 丢弃
-# 鼠标移动 则相互叠加 与手柄的视角移动相重叠 使用统一接口移动视角
+# ==============================================================================
+# TO DO
+# 重写调用方式 支持多个设备同时调用
 #
-# 手柄则存在仅两个个模式 映射 模拟鼠标 
-# 再程序一开始 手柄就进入独占模式
-# uinput接口创建一个虚拟鼠标键盘复合设备供手柄转换
-# 通过组合键 SELECT + RS 切换
-# 
+# 仅支持一个 手柄 鼠标 键盘
+# 仅存在两种模式
+# 仅支持ctrl+c退出
+#
 # 关于手柄的按键检测 如果能直接用iotcl读取就好了
 # 最不济的情况下 是内置ps4 ps5 xbox 的配置文件 然后提供对用户接口 再提供一个小工具创建手柄配置文件
-# ...... 
-#==============================================================================
+# ......
+# ==============================================================================
