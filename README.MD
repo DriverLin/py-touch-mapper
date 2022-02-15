@@ -35,7 +35,7 @@ sudo python ./main.py 触屏设备号 0 0 手柄设备号 映射文件路径
 
 
 ## 触屏映射文件
-[创建映射文件工具](https://driverlin.github.io/py-touch-mapper/create-mapper/build/)
+[创建映射文件工具](https://driverlin.github.io/py-touch-mapper/build/)
 
 按住键盘按键点击即可添加映射
 
