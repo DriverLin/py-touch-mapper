@@ -81,7 +81,7 @@ class touchController:
         # 触摸点数量
         self.allocatedID_num = 0
         # 分配的触摸点id
-        self.touch_id_list = [0, 0, 0, 0, 0, 0, 0, 0, 0]
+        self.touch_id_list = [0, 0, 0, 0, 0, 0, 0, 0, 0,0]
         # 鼠标分配的触摸点id
         # switch between 0 and 1
         self.mouse_id = 0
@@ -516,7 +516,8 @@ class eventHandeler:
                             threading.Thread(
                                 target=self.handelKeyAction,
                                 args=(code, value),
-                            ).start()
+                            ).start()#多线程处理事件经过测试极限情况下有数据同步问题
+                            # self.handelKeyAction(code, value)#同步处理事件
                         else:
                             print("KEY_CODE = ", code, " not in keyMap")
                     else:
@@ -805,6 +806,20 @@ if __name__ == "__main__":
         map_config, touchControlInstance, jsInfo=jsConfig, virtualDev=virtualDev()
     )
     try:
+
+        # testDada = json.load(open("./testevents.json", "r"))
+        # start = time.time()
+        # for i in range(40):
+        #     for events in testDada:
+        #         # time.sleep(0.000001)
+        #         handelerInstance.handelEvents(events)
+        # end = time.time()
+        # time.sleep(0.1)
+        # handelerInstance.destroy()
+        # print("handeled {} events in {} seconds".format(40 * len(testDada), end - start))
+        # exit(0)
+        ## handeled 370320 events in 8.650184869766235 seconds
+
         mainLoop(
             mouseEventPath=mouseEventPath,
             keyboardEventPath=keyboardEventPath,
