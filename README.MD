@@ -22,16 +22,15 @@ cd py-touch-mapper
 sudo python ./main.py 触屏设备号 鼠标设备号 键盘设备号 手柄设备号 映射文件路径
 ```
 
-如果没有启用某个设备 设备号输入一个小于等于0的值
+如果没有启用某个设备，设备号输入一个小于等于0的值
 
-例如在仅启用手柄的情况下
+例如：仅启用手柄
 
 ```
 sudo python ./main.py 触屏设备号 0 0 手柄设备号 映射文件路径
 ```
 
-切换映射开关
-
+## 切换映射模式
 默认键盘使用 ` 键，可在配置文件中修改，手柄为SELECT+RS组合键
 
 
@@ -57,6 +56,11 @@ sudo python ./main.py 触屏设备号 0 0 手柄设备号 映射文件路径
 
 
 ## 手柄配置文件
+手柄按照按键位置统一格式化为XBOX手柄布局， 因此触屏映射配置文件是通用的
+
+扳机键按照力度映射为5个等级的按键 例如 BTN_LT_1 BTN_LT_2 ... BTN_LT_5
+
+没有线性扳机的手柄例如 Switch Pro controller 只有 BTN_LT 和 BTN_RT
 
 在[joystickInfos](https://github.com/DriverLin/py-touch-mapper/tree/main/joystickInfos)中内置了常见手柄的配置文件 
 
@@ -66,8 +70,3 @@ sudo python ./create_joystick_config.py 手柄设备号
 ```
 创建手柄配置文件
 
-手柄按照按键位置统一格式化为XBOX手柄布局， 因此触屏映射配置文件是通用的
-
-扳机键按照力度映射为5个等级的按键 例如 BTN_LT_1 BTN_LT_2 ... BTN_LT_5
-
-没有线性扳机的手柄例如 Switch Pro controller 只有 BTN_LT 和 BTN_RT
