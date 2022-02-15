@@ -8,7 +8,6 @@
     "5": "KEY_5",
     "6": "KEY_6",
     "7": "KEY_7",
-
     "-": "KEY_MINUS",
     "=": "KEY_EQUAL",
     "backspace": "KEY_BACKSPACE",
@@ -80,5 +79,22 @@
     "delete": "KEY_DELETE",
     "8": "BTN_LEFT",
     "9": "BTN_MIDDLE",
-    "0": "BTN_RIGHT"
+    "0": "BTN_RIGHT",
+    "BTN_A": "BTN_A",
+    "BTN_B": "BTN_B",
+    "BTN_X": "BTN_X",
+    "BTN_Y": "BTN_Y",
+    "BTN_LT": "BTN_LT",
+    "BTN_RT": "BTN_RT",
+    "BTN_RB": "BTN_RB",
+    "BTN_LB": "BTN_LB",
+    "BTN_LS": "BTN_LS",
+    "BTN_RS": "BTN_RS",
+    "BTN_START": "BTN_START",
+    "BTN_SELECT": "BTN_SELECT",
+    "BTN_HOME": "BTN_HOME",
+    "BTN_DPAD_UP": "BTN_DPAD_UP",
+    "BTN_DPAD_DOWN": "BTN_DPAD_DOWN",
+    "BTN_DPAD_LEFT": "BTN_DPAD_LEFT",
+    "BTN_DPAD_RIGHT": "BTN_DPAD_RIGHT"
 }

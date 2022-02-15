@@ -11,6 +11,7 @@ import Select from '@mui/material/Select';
 import { click } from "@testing-library/user-event/dist/click";
 import HighlightOffIcon from '@mui/icons-material/HighlightOff';
 import * as keyNameMap from "./keynamemap.json"
+import JoystickListener from "./JoystickListener";
 
 
 function copyToClipboard(text) {
@@ -62,6 +63,7 @@ const FixedIcon = (props) => {
             marginTop: props.size / -2 || -14,
             border: "None",
             alignItems: "center",
+            pointerEvents: "none",
         }}
     >
         {props.text}
@@ -92,7 +94,11 @@ const CostumedInput = (props) => {
         onChange={(e) => {
             setValue(e.target.value.replace(/[^\d]/g, ""))
         }}
+        onFocus={(e) => {
+            window.stopPreventDefault = true
+        }}
         onBlur={(e) => {
+            window.stopPreventDefault = false
             props.onCommit(Number(value))
         }}
         onKeyDown={(e) => {
@@ -145,6 +151,7 @@ export default function Manager() {
     const [imgUrl, setImgUrl] = useState(false);
     const [keyMap, setKeyMap] = useState([])
     const downingKey = useRef(null)
+    const downingBtn = useRef(null)
     const [settings, setSettings] = useState({
         "screen": {
             "size": [
@@ -412,10 +419,10 @@ export default function Manager() {
         setKeyMap(copy)
     }
 
-    const removeFromKeyMap  = (index) => {
+    const removeFromKeyMap = (index) => {
         const copy = [...keyMap];
-        copy.splice(index,1)
-        console.log(  keyMap,"==>",copy  )
+        copy.splice(index, 1)
+        console.log(keyMap, "==>", copy)
         setKeyMap(copy)
     }
 
@@ -423,7 +430,7 @@ export default function Manager() {
     const handelImgClick = (e) => {
         const x = e.clientX;
         const y = e.clientY;
-        const key = downingKey.current;
+        const key = downingKey.current === null ? downingBtn.current : downingKey.current;//优先响应手柄按键
         if (key !== null) {
             const copy = [...keyMap]
             for (let keyData of copy) {
@@ -455,20 +462,30 @@ export default function Manager() {
         }
     }
 
+    const downingStack = useRef([])
+
     useEffect(() => {
         document.onkeydown = (e) => {
-            // e.preventDefault();
-            // console.log(e.key);
-            downingKey.current = e.key.toLowerCase();
+            if (window.stopPreventDefault !== true) {
+                e.preventDefault();
+                downingStack.current.push(e.key)
+                downingKey.current = downingStack.current[downingStack.current.length - 1].toLowerCase();
+            }
+
         }
         document.onkeyup = (e) => {
-            downingKey.current = null
+            // downingKey.current = null
+            if (window.stopPreventDefault !== true) {
+                e.preventDefault();
+                downingStack.current = [...downingStack.current].filter(key => key !== e.key)
+                if (downingStack.current.length === 0) {
+                    downingKey.current = null
+                }
+            }
         }
         document.oncontextmenu = function (e) {
             e.preventDefault();
         };
-
-
     }, [])
 
 
@@ -704,10 +721,10 @@ export default function Manager() {
                     </FormControl>
                 </Grid>
                 <Grid item xs={2}>
-                <IconButton onClick={() => {
-                    console.log("remove index",props.index)
-                    removeFromKeyMap(props.index)
-                  }}>
+                    <IconButton onClick={() => {
+                        console.log("remove index", props.index)
+                        removeFromKeyMap(props.index)
+                    }}>
                         <HighlightOffIcon />
                     </IconButton>
                 </Grid>
@@ -761,7 +778,7 @@ export default function Manager() {
                                     marginLeft: "10px",
                                 }}
                             >
-                                <KeySettingRender data={data} index={index}/>
+                                <KeySettingRender data={data} index={index} />
                             </Paper>
 
                         </Grid>)
@@ -770,14 +787,14 @@ export default function Manager() {
         </div>
     }
 
+
     return (<div style={{
         width: '100vw',
         height: '100vh',
         backgroundColor: '#00796B',
     }}>
-
+        <JoystickListener setDowningBtn={(value) => { downingBtn.current = value }} />
         <input id="fileInput" type="file" style={{ display: "none" }} accept="image/*" onChange={handleFileChange} ></input>
-
         {uploadButton ? <UploadButton onClick={() => { document.getElementById('fileInput').click(); }} /> : null}
         {imgUrl ? <img id="img" src={imgUrl} style={{ width: "100vw", left: 0, top: 0 }} onClick={handelImgClick}  ></img> : null}
         {imgUrl ? <DraggableContainer><ControlPanel /></DraggableContainer> : null}
@@ -791,3 +808,5 @@ export default function Manager() {
         }
     </div>)
 }
+
+
