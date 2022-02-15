@@ -1,4 +1,4 @@
-# Exclusive_mode_mapper
+# 安卓触屏映射工具
 ## 说明
 [mouse-keyboard-map-touch](https://github.com/DriverLin/mouse-keyboard-map-touch)的python实现
 
