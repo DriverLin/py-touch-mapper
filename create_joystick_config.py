@@ -8,9 +8,8 @@ import sys
 import time
 import threading
 import fcntl
-from abs_get import get_absinfo,get_absname
+from utils.abs_get import getABSRanges,getABSName
 import ioctl_opt
-import random
 import curses
 
 EVIOCGRAB = lambda len: ioctl_opt.IOW(ord("E"), 0x90, ctypes.c_int)
@@ -214,31 +213,9 @@ def getABSMap():
                 printABS(lastValue)
     return axisInfo
 
-
-def getABSRanges(path):
-    fp = open(path, "rb")
-    absRange = {}
-    for i in range(64):
-        r, info = get_absinfo(fp, i)
-        if info.minimum == info.maximum:
-            continue
-        else:
-            absRange[i] = (info.minimum, info.maximum)
-    fp.close()
-    return absRange
-
-def getAbsName(path):
-    fp = open(path, "rb")
-    name = get_absname(fp)
-    fp.close()
-    return name
-
-
-
-
 if __name__ == "__main__":
     if os.geteuid() != 0:
-        print("请以root权限运行")
+        print("please run as root")
         exit(1)
     if len(sys.argv) != 2:
         print("args error! , except 2 got {}".format(len(sys.argv)))
@@ -267,9 +244,8 @@ if __name__ == "__main__":
 
     jsPath = "/dev/input/event{}".format(sys.argv[1])
 
-    name = getAbsName(jsPath)
-    printScr(name)
-    exit()
+    name = getABSName(jsPath)
+    printScr(f"creating config file for [{name}]",0,12)
 
     readResult = getABSRanges(jsPath)
     for index in readResult:
@@ -283,7 +259,7 @@ if __name__ == "__main__":
     reader = devReader(jsPath, joyStickchecker)
 
     dpadResult = getDPAD()
-    printScr(msg=json.dumps(dpadResult), x=0, y=8)
+    # printScr(msg=json.dumps(dpadResult), x=0, y=8)
     if len(dpadRanges.keys()) == 0:
         for kname in dpadResult:
             jsInfo["BTN"][int(dpadResult[kname])] = "BTN_" + kname
@@ -317,7 +293,7 @@ if __name__ == "__main__":
         jsInfo["BTN"][int(code)] = "BTN_" + keyname
 
     absMapresult = getABSMap()
-    printScr(msg=json.dumps(absMapresult), x=0, y=9)
+    # printScr(msg=json.dumps(absMapresult), x=0, y=9)
     
     for axis in ["LS", "RS"]:
         for direction in ["X", "Y"]:
@@ -339,8 +315,13 @@ if __name__ == "__main__":
             else:
                 jsInfo["BTN"][int(code)] = "BTN_" + axisname
 
-    with open("./out.json",'w') as f:
+
+    
+    os.makedirs("joystickInfos",exist_ok=True)
+    with open(f"./joystickInfos/{name}.json",'w') as f:
         f.write(json.dumps(jsInfo, indent=4))
 
     stopFlag = True
-    printScr(msg="press any key to exit", x=0, y=10)
+    printScr(f"output file : ./joystickInfos/{name}.json",0,11)
+    printScr(msg="press any key to exit", x=0, y=12)
+

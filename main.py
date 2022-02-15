@@ -10,8 +10,9 @@ import fcntl
 import ioctl_opt
 import random
 
-from uinput import UInput
-from keys import *
+from utils.uinput import UInput
+from utils.keys import *
+from utils.abs_get import getABSName
 
 eventPacker = lambda e_type, e_code, e_value: struct.pack(
     EVENT_FORMAT, 0, 0, e_type, e_code, e_value
@@ -316,9 +317,10 @@ class eventHandeler:
 
         threading.Thread(target=wheelThreadFunc).start()
         threading.Thread(target=mouseAutoRelease).start()
-        threading.Thread(target=jsMoveView).start()
-        threading.Thread(target=lsMoveMouseWheel, args=("LS_X",)).start()
-        threading.Thread(target=lsMoveMouseWheel, args=("LS_Y",)).start()
+        if self.jsInfo != None:
+            threading.Thread(target=jsMoveView).start() 
+            threading.Thread(target=lsMoveMouseWheel, args=("LS_X",)).start()
+            threading.Thread(target=lsMoveMouseWheel, args=("LS_Y",)).start()
 
     def getStick(self, stick="LS"):
         x_val = self.abs_last[f"{stick}_X"]
@@ -333,7 +335,7 @@ class eventHandeler:
         self.exit_flag = True
 
     def switchMode(self):
-        print("切换映射模式")
+        print("switch mode")
         self.mapMode = not self.mapMode
 
     def handelWheelMoveAction(self, targetX=-1, targetY=-1, type=None):
@@ -695,7 +697,7 @@ def mainLoop(
         return
     threads = []
     if jsEventPath != None:
-        print("启用手柄 {}".format(jsEventPath))
+        print("enable joystick {}".format(getABSName(jsEventPath)))
         threads.append(
             devReader(
                 jsEventPath,
@@ -704,7 +706,7 @@ def mainLoop(
             )
         )
     if keyboardEventPath != None:
-        print("启用键盘 {}".format(keyboardEventPath))
+        print("enable keyboard {}".format(getABSName(keyboardEventPath)))
         threads.append(
             devReader(
                 keyboardEventPath,
@@ -712,7 +714,7 @@ def mainLoop(
             )
         )
     if mouseEventPath != None:
-        print("启用鼠标 {}".format(mouseEventPath))
+        print("enable mouse {}".format(getABSName(mouseEventPath)))
         threads.append(
             devReader(
                 mouseEventPath,
@@ -733,7 +735,7 @@ class virtualDev:
         self.uinput.set_relbit(0x02)
         self.uinput.set_relbit(0x06)
         self.uinput.set_relbit(0x08)
-        self.uinput.dev_setup(0, 0, 0, 0, "fake keyboard device", 0)
+        self.uinput.dev_setup(0, 0, 0, 0, "uinput keyboard", 0)
         self.uinput.create_dev()
 
     def post_key_event(self, code, updown):
@@ -757,18 +759,8 @@ def joyStickchecker(events):
 
 
 if __name__ == "__main__":
-
-    # print("twst=================")
-
-    # f = open("/dev/input/event15", "rb")
-    # for i in range(9):
-    #     r, absinfo = get_absinfo(f,i)
-    #     #最小 最大 干扰值 平衡位置
-    #     print(r, absinfo.minimum, absinfo.maximum, absinfo.fuzz, absinfo.flat)
-    # exit(0)
-
     if os.geteuid() != 0:
-        print("请以root权限运行")
+        print("please run as root")
         exit(1)
 
     if len(sys.argv) != 6:
@@ -798,123 +790,19 @@ if __name__ == "__main__":
         None if joyStickIndex <= 0 else "/dev/input/event{}".format(joyStickIndex)
     )
 
-    ds5Config = {
-        "DEADZONE": {
-            "LS": [0.5 - 0.1, 0.5 + 0.1],
-            "RS": [0.5 - 0.04, 0.5 + 0.04],
-        },
-        "ABS": {
-            "0": {
-                "name": "LS_X",
-                "range": [0, 255],
-                "reverse": False,
-            },
-            "1": {
-                "name": "LS_Y",
-                "range": [0, 255],
-                "reverse": False,
-            },
-            "2": {
-                "name": "RS_X",
-                "range": [0, 255],
-                "reverse": False,
-            },
-            "5": {
-                "name": "RS_Y",
-                "range": [0, 255],
-                "reverse": False,
-            },
-            "3": {
-                "name": "LT",
-                "range": [0, 255],
-                "reverse": False,
-            },
-            "4": {
-                "name": "RT",
-                "range": [0, 255],
-                "reverse": False,
-            },
-            "16": {
-                "name": "HAT0X",
-                "range": [-1, 1],
-                "reverse": False,
-            },
-            "17": {
-                "name": "HAT0Y",
-                "range": [-1, 1],
-                "reverse": False,
-            },
-        },
-        "BTN": {
-            "305": "BTN_A",
-            "306": "BTN_B",
-            "304": "BTN_X",
-            "307": "BTN_Y",
-            "312": "BTN_SELECT",
-            "313": "BTN_START",
-            "316": "BTN_HOME",
-            "308": "BTN_LB",
-            "309": "BTN_RB",
-            "314": "BTN_LS",
-            "315": "BTN_RS",
-            "317": "BTN_THUMBL",
-        },
-        "MAP_KEYBOARD": {
-            "BTN_LT_2": "BTN_RIGHT",
-            "BTN_RT_2": "BTN_LEFT",
-            "BTN_DPAD_UP": "KEY_UP",
-            "BTN_DPAD_LEFT": "KEY_LEFT",
-            "BTN_DPAD_RIGHT": "KEY_RIGHT",
-            "BTN_DPAD_DOWN": "KEY_DOWN",
-            "BTN_A": "KEY_ENTER",
-            "BTN_B": "KEY_BACK",
-            "BTN_SELECT": "KEY_COMPOSE",
-            "BTN_THUMBL": "KEY_HOME",
-        },
-    }
+    jsConfig = None
+    if jsEventPath != None:
+        jsname = getABSName(jsEventPath)
+        jsConfigFilePath = os.path.join("joystickInfos", jsname + ".json")
+        if not os.path.exists(jsConfigFilePath):
+            print(f"joystick config [{jsname}].json not found in joystickInfos \nplease run create_joystick_config.py to create it")
+            exit(4)
+        jsConfig = json.load(open(jsConfigFilePath, "r"))
 
-    xboxConfig = {
-        "DEADZONE": {"LS": [0.4, 0.6], "RS": [0.46, 0.54]},
-        "ABS": {
-            "17": {"name": "HAT0Y", "range": [-1, 1], "reverse": False},
-            "16": {"name": "HAT0X", "range": [-1, 1], "reverse": False},
-            "0": {"name": "LS_X", "range": [0, 65535], "reverse": False},
-            "1": {"name": "LS_Y", "range": [0, 65535], "reverse": False},
-            "10": {"name": "LT", "range": [0, 1023], "reverse": False},
-            "9": {"name": "RT", "range": [0, 1023], "reverse": False},
-            "2": {"name": "RS_X", "range": [0, 65535], "reverse": False},
-            "5": {"name": "RS_Y", "range": [0, 65535], "reverse": False},
-        },
-        "BTN": {
-            "304": "BTN_A",
-            "305": "BTN_B",
-            "307": "BTN_X",
-            "308": "BTN_Y",
-            "317": "BTN_LS",
-            "318": "BTN_RS",
-            "310": "BTN_LB",
-            "311": "BTN_RB",
-            "158": "BTN_SELECT",
-            "315": "BTN_START",
-            "172": "BTN_HOME",
-        },
-        "MAP_KEYBOARD": {
-            "BTN_LT_2": "BTN_RIGHT",
-            "BTN_RT_2": "BTN_LEFT",
-            "BTN_DPAD_UP": "KEY_UP",
-            "BTN_DPAD_LEFT": "KEY_LEFT",
-            "BTN_DPAD_RIGHT": "KEY_RIGHT",
-            "BTN_DPAD_DOWN": "KEY_DOWN",
-            "BTN_A": "KEY_ENTER",
-            "BTN_B": "KEY_BACK",
-            "BTN_SELECT": "KEY_COMPOSE",
-            "BTN_THUMBL": "KEY_HOME",
-        },
-    }
 
     touchControlInstance = touchController(touchEventPath)
     handelerInstance = eventHandeler(
-        map_config, touchControlInstance, jsInfo=xboxConfig, virtualDev=virtualDev()
+        map_config, touchControlInstance, jsInfo=jsConfig, virtualDev=virtualDev()
     )
     try:
         mainLoop(
@@ -925,4 +813,4 @@ if __name__ == "__main__":
         )
     except KeyboardInterrupt:
         handelerInstance.destroy()
-        print("程序将在下次事件完成后退出")
+        print("program will exit on next event...")
