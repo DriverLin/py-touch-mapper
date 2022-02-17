@@ -1,3 +1,4 @@
+import queue
 import sys
 import os
 import json
@@ -9,6 +10,9 @@ import threading
 import fcntl
 import ioctl_opt
 import random
+import argparse
+import socket
+import pickle 
 
 from utils.uinput import UInput
 from utils.keys import *
@@ -188,10 +192,20 @@ class eventHandeler:
         self.reportRate = 1 / reportRate
         self.jsViewRate = 1 / jsViewRate
         self.js_switch_key_down = UP
-        self.mapMode = (
-            False  # 手柄一直处于独占模式 js_map_mode == False 则模拟键鼠 js_map_mode == True 则映射触屏
-        )
+        self.jsDeadZone = {#综合所有js配置文件得到的最大死区值
+            "LS":[0.5,0.5],
+            "RS":[0.5,0.5],
+        }#
+        for stick in ["LS","RS"]:
+            for jsname in self.jsInfo.keys():
+                deadZone = self.jsInfo[jsname]["DEADZONE"][stick]
+                self.jsDeadZone[stick][0] = deadZone[0] if deadZone[0] < self.jsDeadZone[stick][0] else self.jsDeadZone[stick][0]
+                self.jsDeadZone[stick][1] = deadZone[1] if deadZone[1] > self.jsDeadZone[stick][1] else self.jsDeadZone[stick][1]
+        self.mapMode = False
+        # 手柄一直处于独占模式 js_map_mode == False 则模拟键鼠 js_map_mode == True 则映射触屏
         self.exit_flag = False  # 退出标志 用于停止内部线程
+        
+        
         self.mouseLock = threading.Lock()  # 由于鼠标操作来源不唯一(定时释放和事件驱动的移动)所以需要锁
         self.wheelLock = threading.Lock()  # 左移动摇杆  可以同时用键盘和手柄触发
         self.SWITCH_KEY = translate_keyname_keycode(map_config["MOUSE"]["SWITCH_KEY"])
@@ -317,7 +331,7 @@ class eventHandeler:
 
         threading.Thread(target=wheelThreadFunc).start()
         threading.Thread(target=mouseAutoRelease).start()
-        if self.jsInfo != None:
+        if len(self.jsInfo.keys()) != 0:
             threading.Thread(target=jsMoveView).start() 
             threading.Thread(target=lsMoveMouseWheel, args=("LS_X",)).start()
             threading.Thread(target=lsMoveMouseWheel, args=("LS_Y",)).start()
@@ -325,7 +339,7 @@ class eventHandeler:
     def getStick(self, stick="LS"):
         x_val = self.abs_last[f"{stick}_X"]
         y_val = self.abs_last[f"{stick}_Y"]
-        deadZone = self.jsInfo["DEADZONE"][stick]
+        deadZone = self.jsDeadZone[stick]
         if deadZone[0] < x_val < deadZone[1] and deadZone[0] < y_val < deadZone[1]:
             return (0.5, 0.5)
         else:
@@ -494,7 +508,7 @@ class eventHandeler:
         map_value = x_Asix * 3 + y_Asix
         self.wheelTarget = self.wheelMap[map_value]
 
-    def handelEvents(self, events):
+    def handelEvents(self, events,devname):
         """=========================================
 
         events: 事件列表
@@ -535,7 +549,6 @@ class eventHandeler:
             if mouseMovd:
                 self.handelMouseMoveAction(offsetX=abs_x, offsetY=abs_y)
             if mouseWheelMoved:
-
                 def quickClick():
                     wh_name = {
                         "1_0": "WH_LEFT",
@@ -559,22 +572,25 @@ class eventHandeler:
 
         return self.exit_flag
 
-    def postVirtualDev(self, type, arg1, arg2):
+    def postVirtualDev(self, type, arg1, arg2,devname=None):
         if type == "mouse":
             if arg1 != 0 or arg2 != 0:
                 self.virtualDev.post_mouse_event(arg1, arg2)
         elif type == "key":
             self.virtualDev.post_key_event(arg1, arg2)
         elif type == "btn":
-            if arg1 in self.jsInfo["MAP_KEYBOARD"]:
-                mapedKey = self.jsInfo["MAP_KEYBOARD"][arg1]
+            if arg1 in self.jsInfo[devname]["MAP_KEYBOARD"]:
+                mapedKey = self.jsInfo[devname]["MAP_KEYBOARD"][arg1]
                 if mapedKey in LINUX_KEYS:
                     code = LINUX_KEYS[mapedKey]
                     self.virtualDev.post_key_event(code, arg2)
         elif type == "wheel":
             self.virtualDev.post_wheel_event(arg1, arg2)
 
-    def handelJSEvents(self, events):
+    def handelJSEvents(self, events,jsname):
+        if jsname not in self.jsInfo:
+            print("unknown joystick name:", jsname)
+            return
         def handelJSBTNAction(key, updown):
             # print("handelJSBTNAction", key, updown)
             if key == "BTN_SELECT":
@@ -590,15 +606,13 @@ class eventHandeler:
                 else:
                     print("KEY_CODE = ", key, " not in keyMap")
             else:
-                self.postVirtualDev("btn", key, updown)
+                self.postVirtualDev("btn", key, updown,jsname)
 
         def handelABSAction(name, value):
             # print("handelABSAction", name, value)
             if name in ["LS_X", "LS_Y"]:  # LS事件
-                ls_dz = self.jsInfo["DEADZONE"]["LS"]
                 self.abs_last[name] = value
                 if self.mapMode == True:
-                    ls_dz = self.jsInfo["DEADZONE"]["LS"]
                     (ls_x, ls_y) = self.getStick("LS")
                     if ls_x == 0.5 and ls_y == 0.5:
                         self.wheel_release[1] = True
@@ -620,12 +634,12 @@ class eventHandeler:
 
         for (type, code, value) in events:
             if type == EV_ABS:
-                name = self.jsInfo["ABS"][str(code)]["name"]
-                minVal, maxVal = self.jsInfo["ABS"][str(code)]["range"]
+                name = self.jsInfo[jsname]["ABS"][str(code)]["name"]
+                minVal, maxVal = self.jsInfo[jsname]["ABS"][str(code)]["range"]
                 formatedValue = (value - minVal) / (maxVal - minVal)
                 formatedValue = (
                     1 - formatedValue
-                    if self.jsInfo["ABS"][str(code)]["reverse"]
+                    if self.jsInfo[jsname]["ABS"][str(code)]["reverse"]
                     else formatedValue
                 )
                 if name in LR_RT_VALUEMAP:  # 扳机
@@ -649,8 +663,8 @@ class eventHandeler:
                 else:  # 摇杆
                     handelABSAction(name, formatedValue)
             elif type == EV_KEY:
-                if str(code) in self.jsInfo["BTN"]:
-                    name = self.jsInfo["BTN"][str(code)]
+                if str(code) in self.jsInfo[jsname]["BTN"]:
+                    name = self.jsInfo[jsname]["BTN"][str(code)]
                     handelJSBTNAction(name, value)
         return self.exit_flag
 
@@ -658,14 +672,13 @@ class eventHandeler:
 InterruptedFlag = False
 
 
-def devReader(path="", handeler=None):
+def devReader(path="",devname = "", handeler=None):
     """path:设备路径
     handeler:事件处理器
     exclusive:是否独占
     mode:运行标志 模式 直接传递给事件处理器
     switchMode:切换模式函数
     返回 thread 外部join()"""
-
     def readFunc():
         with open(path, "rb") as f:
             buffer = []
@@ -674,7 +687,7 @@ def devReader(path="", handeler=None):
                 byte = f.read(EVENT_SIZE)
                 e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
                 if e_type == EV_SYN and e_code == SYN_REPORT and e_val == 0:
-                    if handeler(buffer):
+                    if handeler(buffer,devname):
                         break
                     buffer.clear()
                 else:
@@ -690,39 +703,6 @@ def devReader(path="", handeler=None):
     thread.start()
     return thread
 
-
-def mainLoop(
-    mouseEventPath=None, keyboardEventPath=None, jsEventPath=None, handelerInstance=None
-):
-    if handelerInstance == None:
-        return
-    threads = []
-    if jsEventPath != None:
-        print("enable joystick {}".format(getABSName(jsEventPath)))
-        threads.append(
-            devReader(
-                jsEventPath,
-                handelerInstance.handelJSEvents,
-                # joyStickchecker
-            )
-        )
-    if keyboardEventPath != None:
-        print("enable keyboard {}".format(getABSName(keyboardEventPath)))
-        threads.append(
-            devReader(
-                keyboardEventPath,
-                handelerInstance.handelEvents,
-            )
-        )
-    if mouseEventPath != None:
-        print("enable mouse {}".format(getABSName(mouseEventPath)))
-        threads.append(
-            devReader(
-                mouseEventPath,
-                handelerInstance.handelEvents,
-            )
-        )
-    [readerThread.join() for readerThread in threads]
 
 
 class virtualDev:
@@ -759,73 +739,154 @@ def joyStickchecker(events):
     print("joyStickchecker", events)
 
 
+class remoteEventListener():
+    def __init__(self,port,handelerInstance) -> None:
+        self.MAX_BUFFER_SIZE = 1024
+        self.port = port
+        self.handelerInstance = handelerInstance
+        self.running = True
+        self.contentQueue = queue.Queue()
+        def recvThread():
+            try:
+                udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                udpSocket.bind(("", port))
+                print("listening remote events on port :", port)
+                while self.running:
+                    recvData = udpSocket.recvfrom(self.MAX_BUFFER_SIZE)
+                    content, destInfo = recvData
+                    self.contentQueue.put(content)
+                udpSocket.close()
+            except Exception as e:
+                print(e)
+                self.running = False
+        def handelThread():
+            while self.running:
+                content = self.contentQueue.get()
+                [events,devname,type] = pickle.loads(content)
+                if type == "normal":
+                    handelerInstance.handelEvents(events,devname)
+                elif type == "js":#两地有相同的手柄配置文件
+                    handelerInstance.handelJSEvents(events,devname)
+        threading.Thread(target=recvThread).start()
+        threading.Thread(target=handelThread).start()
+
+
+    def destroy(self):
+        self.running = False
+
+
+class remoteEventSender():
+    def __init__(self,addr) -> None:
+        print("send all events to :", addr)
+        self.targetIp = addr.split(":")[0]
+        self.targetPort = int(addr.split(":")[1])
+        self.contentQueue = queue.Queue()
+        self.running = True
+        def sendThread():
+            udpSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sendArr = (self.targetIp, self.targetPort)
+            while self.running:
+                content = self.contentQueue.get()
+                udpSocket.sendto(content, sendArr)
+            udpSocket.close()
+        threading.Thread(target=sendThread).start()
+
+    def destroy(self):
+        self.running = False
+
+    def __sentEvents(self,events,devname,type):
+        # print("sentEvents",events,devname,type)
+        self.contentQueue.put(pickle.dumps([events,devname,type]))
+
+    def handelJSEvents(self,events,devname):
+        self.__sentEvents(events,devname,"js")
+
+    def handelEvents(self,events,devname):
+        self.__sentEvents(events,devname,"normal")
+
 if __name__ == "__main__":
     if os.geteuid() != 0:
         print("please run as root")
         exit(1)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--touch",metavar="int",type=int, default=0,required=False, help="touch event index 触屏设备号")
+    parser.add_argument("-n", "--normal",metavar="int", type=int, default=[],required=False,nargs="+", help="mouse or keyboard event index 鼠标或键盘设备号")
+    parser.add_argument("-m", "--mouse",metavar="int", type=int, default=[],required=False,nargs="+", help="mouse event index 鼠标设备号")
+    parser.add_argument("-k", "--keyboard",metavar="int", type=int, default=[],required=False, nargs="+",help="keyboard event index 键盘设备号")
+    parser.add_argument("-j", "--joystick",metavar="int", type=int, default=[], required=False,nargs="+",help="joystick event index 手柄设备号")
+    parser.add_argument("-c","--mapconfig",metavar="str", type=str, default="",required=False, help="map config file 触屏映射文件")
+    parser.add_argument("-u","--udp",metavar="bool",type=bool,default=False,required=False,nargs="?",help="recv remote events through udp 是否通过udp接受远程事件")
+    parser.add_argument("-p","--port",metavar="int",type=int,default=9000,required=False,help="udp listen port 远程事件接收端口号")
+    parser.add_argument("-r","--remote",metavar="bool",type=bool,default=False,required=False,nargs="?",help="remote mode ,send local events to remote 远程模式,发送所有本地事件到远程")
+    parser.add_argument("-a","--addr",metavar="str",type=str,default="",required=False,help="remote ip 远程设备ip端口号")
+    
+    args = parser.parse_args()
 
-    if len(sys.argv) != 6:
-        print("args error! , except 6 got {}".format(len(sys.argv)))
-        exit(2)
+    # print(args)
 
-    touchIndex = int(sys.argv[1])
-    mouseIndex = int(sys.argv[2])
-    keyboardIndex = int(sys.argv[3])
-    joyStickIndex = int(sys.argv[4])
-    configFilePath = sys.argv[5]
+    normalDevices = ["/dev/input/event{}".format(x) for x in  (args.normal + args.mouse + args.keyboard)  ]
+    jsDevices = ["/dev/input/event{}".format(x) for x in  args.joystick  ]
 
-    touchEventPath = "/dev/input/event{}".format(touchIndex)
-
-    if not os.path.exists(configFilePath):
-        print("config file error!")
-        exit(3)
-    map_config = json.load(open(configFilePath, "r", encoding="UTF-8"))
-
-    mouseEventPath = (
-        None if mouseIndex <= 0 else "/dev/input/event{}".format(mouseIndex)
-    )
-    keyboardEventPath = (
-        None if keyboardIndex <= 0 else "/dev/input/event{}".format(keyboardIndex)
-    )
-    jsEventPath = (
-        None if joyStickIndex <= 0 else "/dev/input/event{}".format(joyStickIndex)
-    )
-
-    jsConfig = None
-    if jsEventPath != None:
-        jsname = getABSName(jsEventPath)
-        jsConfigFilePath = os.path.join("joystickInfos", jsname + ".json")
-        if not os.path.exists(jsConfigFilePath):
-            print(f"joystick config [{jsname}].json not found in joystickInfos \nplease run create_joystick_config.py to create it")
-            exit(4)
-        jsConfig = json.load(open(jsConfigFilePath, "r"))
-
-
-    touchControlInstance = touchController(touchEventPath)
-    handelerInstance = eventHandeler(
-        map_config, touchControlInstance, jsInfo=jsConfig, virtualDev=virtualDev()
-    )
-    try:
-
-        # testDada = json.load(open("./testevents.json", "r"))
-        # start = time.time()
-        # for i in range(40):
-        #     for events in testDada:
-        #         # time.sleep(0.000001)
-        #         handelerInstance.handelEvents(events)
-        # end = time.time()
-        # time.sleep(0.1)
-        # handelerInstance.destroy()
-        # print("handeled {} events in {} seconds".format(40 * len(testDada), end - start))
-        # exit(0)
-        ## handeled 370320 events in 8.650184869766235 seconds
-
-        mainLoop(
-            mouseEventPath=mouseEventPath,
-            keyboardEventPath=keyboardEventPath,
-            jsEventPath=jsEventPath,
-            handelerInstance=handelerInstance,
+    handelerInstance = None
+    remoteEventListenerInstance = None
+    if args.remote != False:
+        if args.addr == "":
+            print("please input remote ip")
+            exit(3)
+        else:
+            handelerInstance = remoteEventSender(args.addr)
+    else:
+        touchEventPath = "/dev/input/event{}".format(args.touch)
+        if not os.path.exists(touchEventPath):
+            print("please input correct touch event index")
+            exit(3)
+        map_config = json.load(open(args.mapconfig, "r", encoding="UTF-8")) if os.path.exists(args.mapconfig) else None
+        if map_config == None:
+            print("map config file not found")
+            exit(3)
+        jsConfig = {}
+        # if len(jsDevices) != 0:
+        
+        for jsDevice in jsDevices:
+            jsname = getABSName(jsDevice)
+            jsConfigFilePath = os.path.join("joystickInfos", jsname + ".json")
+            if not os.path.exists(jsConfigFilePath):
+                print(f"joystick config [{jsname}].json not found in joystickInfos \nplease run create_joystick_config.py to create it")
+                exit(4)#检测到未知手柄则提示用户先创建配置文件
+        for configFiles in os.listdir("joystickInfos"):#加载所有的手柄配置文件 因为可能会有远程events发来
+            if configFiles.endswith(".json"):
+                jsConfig[configFiles[:-5]] = json.load(open(os.path.join("joystickInfos", configFiles), "r"))
+        
+        handelerInstance = eventHandeler(
+            map_config, touchController(touchEventPath), jsInfo=jsConfig, virtualDev=virtualDev()
         )
+        
+        if args.udp != False:
+            remoteEventListenerInstance = remoteEventListener(args.port,handelerInstance)
+    try:
+        threads = []
+        for eventPath in normalDevices:
+            print("ebable normal device:{}".format(getABSName(eventPath)))
+            threads.append(
+                devReader(
+                    eventPath,
+                    getABSName(eventPath),
+                    handelerInstance.handelEvents,
+                )
+            )
+        for eventPath in jsDevices:#有一说一 不建议用多个手柄 例如DS5摇杆很难静止，会导致即使DS5没在用也会不停触发事件覆盖其他手柄的状态
+            print("ebable js device:{}".format(getABSName(eventPath)))
+            threads.append(
+                devReader(
+                    eventPath,
+                    getABSName(eventPath),
+                    handelerInstance.handelJSEvents,
+                )
+            )
+
+        [readerThread.join() for readerThread in threads]
     except KeyboardInterrupt:
         handelerInstance.destroy()
+        if remoteEventListenerInstance != None:
+            remoteEventListenerInstance.destroy()
         print("program will exit on next event...")

@@ -6,28 +6,71 @@
 
 
 ## 使用方法
-查看自己的触屏鼠标和键盘对应的设备号。
-```
-sudo getevent -l
-```
 
 下载
 ```
 git clone https://github.com/DriverLin/py-touch-mapper
 ```
-
+查看自己的触屏鼠标和键盘对应的设备号。
+```
+sudo getevent -l
+```
 执行
 ```
 cd py-touch-mapper
-sudo python ./main.py 触屏设备号 鼠标设备号 键盘设备号 手柄设备号 映射文件路径
+
+sudo python ./main.py -h
+
+usage: main.py [-h] [-t int] [-n int [int ...]] [-m int [int ...]]
+               [-k int [int ...]] [-j int [int ...]] [-c str] [-u [bool]] [-p int]
+               [-r [bool]] [-a str]
+
+options:
+  -h, --help            show this help message and exit
+  -t int, --touch int   touch event index 触屏设备号
+  -n int [int ...], --normal int [int ...]
+                        mouse or keyboard event index 鼠标或键盘设备号
+  -m int [int ...], --mouse int [int ...]
+                        mouse event index 鼠标设备号
+  -k int [int ...], --keyboard int [int ...]
+                        keyboard event index 键盘设备号
+  -j int [int ...], --joystick int [int ...]
+                        joystick event index 手柄设备号
+  -c str, --mapconfig str
+                        map config file 触屏映射文件
+  -u [bool], --udp [bool]
+                        recv remote events through udp 是否通过udp接受远程事件
+  -p int, --port int    udp listen port 远程事件接收端口号
+  -r [bool], --remote [bool]
+                        remote mode ,send local events to remote 远程模式,发送所有本地事件到远程
+  -a str, --addr str    remote ip 远程设备ip端口号
+
 ```
-
-如果没有启用某个设备，设备号输入一个小于等于0的值
-
-例如：仅启用手柄
+## 示例
 
 ```
-sudo python ./main.py 触屏设备号 0 0 手柄设备号 映射文件路径
+触屏 /dev/input/event5
+鼠标1 /dev/input/event15
+鼠标2 /dev/input/event19
+键盘 /dev/input/event16
+手柄 /dev/input/event17
+配置文件 pubg.json 
+```
+启用鼠标1 鼠标2 键盘 手柄
+```
+sudo python main.py -t 5 -n 15 16 19 -j 17 -c pubg.json  
+```
+仅启用鼠标1与手柄
+```
+sudo python main.py -t 5 -n 15 -j 17 -c pubg.json  
+```
+事件发送模式
+```
+sudo python main.py -n 15 16 -j 17 -r -a 127.0.0.1:9000 
+```
+在端口9000接收远程事件
+```
+sudo python main.py -t 5 -n 15 16 19 -j 17 -c pubg.json   -c pubg.json -u -p 9000
 ```
 
 ## 切换映射模式
