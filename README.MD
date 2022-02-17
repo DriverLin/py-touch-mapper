@@ -70,7 +70,7 @@ sudo python main.py -n 15 16 -j 17 -r -a 127.0.0.1:9000
 ```
 在端口9000接收远程事件
 ```
-sudo python main.py -t 5 -n 15 16 19 -j 17 -c pubg.json   -c pubg.json -u -p 9000
+sudo python main.py -t 5 -n 15 16 19 -j 17 -c pubg.json   -u -p 9000
 ```
 
 ## 切换映射模式
