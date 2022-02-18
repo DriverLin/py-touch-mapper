@@ -28,14 +28,8 @@ usage: main.py [-h] [-t int] [-n int [int ...]] [-m int [int ...]]
 options:
   -h, --help            show this help message and exit
   -t int, --touch int   touch event index 触屏设备号
-  -n int [int ...], --normal int [int ...]
-                        mouse or keyboard event index 鼠标或键盘设备号
-  -m int [int ...], --mouse int [int ...]
-                        mouse event index 鼠标设备号
-  -k int [int ...], --keyboard int [int ...]
-                        keyboard event index 键盘设备号
-  -j int [int ...], --joystick int [int ...]
-                        joystick event index 手柄设备号
+  -e int [int ...], --event int [int ...]
+                        x of /dev/input/eventX 设备号
   -c str, --mapconfig str
                         map config file 触屏映射文件
   -u [bool], --udp [bool]
@@ -58,19 +52,19 @@ options:
 ```
 启用鼠标1 鼠标2 键盘 手柄
 ```
-sudo python main.py -t 5 -n 15 16 19 -j 17 -c pubg.json  
+sudo python main.py -t 5 -e 15 16 19 17 -c pubg.json  
 ```
 仅启用鼠标1与手柄
 ```
-sudo python main.py -t 5 -n 15 -j 17 -c pubg.json  
+sudo python main.py -t 5 -e 15 17 -c pubg.json  
 ```
 事件发送模式
 ```
-sudo python main.py -n 15 16 -j 17 -r -a 127.0.0.1:9000 
+sudo python main.py -e 15 16 17 -r -a 127.0.0.1:9000 
 ```
 在端口9000接收远程事件
 ```
-sudo python main.py -t 5 -n 15 16 19 -j 17 -c pubg.json   -u -p 9000
+sudo python main.py -t 5 -c pubg.json -u -p 9000
 ```
 
 ## 切换映射模式
