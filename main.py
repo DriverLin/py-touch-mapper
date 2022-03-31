@@ -1,28 +1,26 @@
-import queue
-import sys
-import os
-import json
+import argparse
 import ctypes
+import fcntl
+import json
+import os
+import pickle
+import queue
+import random
+import socket
 import struct
 import sys
-import time
 import threading
-import fcntl
-import ioctl_opt
-import random
-import argparse
-import socket
-import pickle
+import time
 
-from utils.uinput import UInput
-from utils.keys import *
+import ioctl_opt
 from utils.abs_get import getABSName
 from utils.joystick_curve import coutumed_curve
+from utils.keys import *
+from utils.uinput import UInput
 
-eventPacker = lambda e_type, e_code, e_value: struct.pack(
-    EVENT_FORMAT, 0, 0, e_type, e_code, e_value
-)
-getRand = lambda: random.randint(0, 20)
+
+def getRand(): return random.randint(0, 20)
+
 
 DOWN = 0x1
 UP = 0x0
@@ -55,8 +53,16 @@ BTN_TASK = 0x117
 EVENT_FORMAT = "llHHI"
 EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
 
+
+def eventPacker(e_type, e_code, e_value): return struct.pack(
+    EVENT_FORMAT, 0, 0, e_type, e_code, e_value
+)
+
+
 SYN_EVENT = eventPacker(EV_SYN, SYN_REPORT, 0x0)
-EVIOCGRAB = lambda len: ioctl_opt.IOW(ord("E"), 0x90, ctypes.c_int)
+def EVIOCGRAB(len): return ioctl_opt.IOW(ord("E"), 0x90, ctypes.c_int)
+
+
 HAT_D_U = {
     "0.5_1.0": (1, DOWN),
     "0.5_0.0": (0, DOWN),
@@ -76,10 +82,9 @@ LR_RT_VALUEMAP = {  # 扳机映射按键 除了1-5全按还会触发其他LT事�
 }
 
 
-
-
 def atomWarpper(func):
     lock = threading.Lock()
+
     def f(*args, **kwargs):
         lock.acquire()
         try:
@@ -91,53 +96,43 @@ def atomWarpper(func):
         return result
     return f
 
+
 class touchController:
     def __init__(self, path) -> None:
         self.path = path
-        self.fp = open(self.path, "wb")
-        # 上次触摸id
+        self.fd = os.open(self.path, os.O_RDWR)
         self.last_touch_id = -1
-        # 触摸点数量
         self.allocatedID_num = 0
-        # 分配的触摸点id
         self.touch_id_list = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        # 鼠标分配的触摸点id
-        # switch between 0 and 1
         self.mouse_id = 0
-
-    def fpcheck(self):
-        if self.fp.closed:
-            self.fp = open(self.path, "wb")
 
     # 锁！！！！
     @atomWarpper
     def postEvent(self, type, uncertainId, x, y):
-        # self.fpcheck()
         trueId = uncertainId
+        bytes = b''
         if type == MOVE_FLAG and uncertainId != -1:
             if self.last_touch_id != uncertainId:
-                self.fp.write(eventPacker(EV_ABS, ABS_MT_SLOT, uncertainId))
+                bytes += eventPacker(EV_ABS, ABS_MT_SLOT, uncertainId)
                 self.last_touch_id = uncertainId
-            # 虽然负数pack异常，但是触屏这里不需要
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_POSITION_X, x & 0xFFFFFFFF))
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_POSITION_Y, y & 0xFFFFFFFF))
-            self.fp.write(SYN_EVENT)
-            self.fp.flush()
+            bytes += eventPacker(EV_ABS, ABS_MT_POSITION_X, x & 0xFFFFFFFF)
+            bytes += eventPacker(EV_ABS, ABS_MT_POSITION_Y, y & 0xFFFFFFFF)
+            bytes += SYN_EVENT
+            os.write(self.fd, bytes)
 
         elif type == RELEASE_FLAG and uncertainId != -1:
             trueId = -1
             self.touch_id_list[uncertainId] = 0
             self.allocatedID_num -= 1
-
             if self.last_touch_id != uncertainId:
-                self.fp.write(eventPacker(EV_ABS, ABS_MT_SLOT, uncertainId))
+                bytes += eventPacker(EV_ABS, ABS_MT_SLOT, uncertainId)
                 self.last_touch_id = uncertainId
-
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_TRACKING_ID, 0xFFFFFFFF))
+            bytes += eventPacker(EV_ABS, ABS_MT_TRACKING_ID, 0xFFFFFFFF)
             if self.allocatedID_num == 0:
-                self.fp.write(eventPacker(EV_KEY, BTN_TOUCH, UP))
-            self.fp.write(SYN_EVENT)
-            self.fp.flush()
+                bytes += eventPacker(EV_KEY, BTN_TOUCH, UP)
+            bytes += SYN_EVENT
+            os.write(self.fd, bytes)
+
         else:
             if type == MOUSE_REQUIRE:
                 self.mouse_id = 1 if self.mouse_id == 0 else 0
@@ -152,24 +147,19 @@ class touchController:
             if trueId == -1:
                 # 没有空余的触摸点
                 return -1
-
             self.touch_id_list[trueId] = 1
             self.allocatedID_num += 1
             self.last_touch_id = trueId
+            bytes += eventPacker(EV_ABS, ABS_MT_SLOT, trueId)
+            bytes += eventPacker(EV_ABS, ABS_MT_TRACKING_ID, trueId)
+            bytes += eventPacker(EV_KEY, BTN_TOUCH,
+                                 DOWN) if self.allocatedID_num == 1 else b''
+            bytes += eventPacker(EV_ABS, ABS_MT_POSITION_X, x & 0xFFFFFFFF)
+            bytes += eventPacker(EV_ABS, ABS_MT_POSITION_Y, y & 0xFFFFFFFF)
+            bytes += SYN_EVENT
+            os.write(self.fd, bytes)
 
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_SLOT, trueId))
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_TRACKING_ID, trueId))
-            self.fp.write(
-                eventPacker(EV_KEY, BTN_TOUCH, DOWN)
-            ) if self.allocatedID_num == 1 else None
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_POSITION_X, x & 0xFFFFFFFF))
-            self.fp.write(eventPacker(EV_ABS, ABS_MT_POSITION_Y, y & 0xFFFFFFFF))
-            self.fp.write(SYN_EVENT)
-            self.fp.flush()
         return trueId
-
-
-global_exclusive_flag = False
 
 
 def translate_keyname_keycode(keyname):
@@ -225,7 +215,8 @@ class eventHandeler:
         # 手柄一直处于独占模式 js_map_mode == False 则模拟键鼠 js_map_mode == True 则映射触屏
         self.exit_flag = False  # 退出标志 用于停止内部线程
 
-        self.SWITCH_KEY = translate_keyname_keycode(map_config["MOUSE"]["SWITCH_KEY"])
+        self.SWITCH_KEY = translate_keyname_keycode(
+            map_config["MOUSE"]["SWITCH_KEY"])
         self.switch_key_down = False
         self.keyMap = {
             translate_keyname_keycode(keyname): map_config["KEY_MAPS"][keyname]
@@ -297,7 +288,8 @@ class eventHandeler:
                         )
                         wheelNow = (targetX, targetY)
                         pass
-                        self.handelWheelMoveAction(targetX=targetX, targetY=targetY)
+                        self.handelWheelMoveAction(
+                            targetX=targetX, targetY=targetY)
                     else:
                         pass
 
@@ -341,10 +333,12 @@ class eventHandeler:
                         time.sleep(0.1)
                     else:
                         value = 1 if stickValue > 0.5 else -1
-                        x_y = [-1 * value, 0] if targetStick == "LS_Y" else [0, value]
+                        x_y = [-1 * value,
+                               0] if targetStick == "LS_Y" else [0, value]
                         # print(targetStick, value,x_y)
                         self.postVirtualDev("wheel", x_y[0], x_y[1])
-                        time.sleep((1 - abs(stickValue - 0.5) * 2) * 0.95 + 0.05)
+                        time.sleep((1 - abs(stickValue - 0.5) * 2)
+                                   * 0.95 + 0.05)
 
         threading.Thread(target=wheelThreadFunc).start()
         threading.Thread(target=mouseAutoRelease).start()
@@ -374,7 +368,8 @@ class eventHandeler:
             if targetX != -1 and targetY != -1:
                 if self.wheelTouchID == -1:
                     self.wheelTouchID = self.touchController.postEvent(
-                        WHEEL_REQUIRE, -1, self.wheelMap[4][0], self.wheelMap[4][1]
+                        WHEEL_REQUIRE, -
+                        1, self.wheelMap[4][0], self.wheelMap[4][1]
                     )
                 self.touchController.postEvent(
                     MOVE_FLAG, self.wheelTouchID, targetX, targetY
@@ -407,7 +402,8 @@ class eventHandeler:
                 self.realtiveX = self.mouseStartX + getRand()
                 self.realtiveY = self.mouseStartY + getRand()
 
-                self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
+                self.touchController.postEvent(
+                    RELEASE_FLAG, self.mouseTouchID, 0, 0)
                 # 申请触摸ID 随机初始偏移量
                 self.mouseTouchID = self.touchController.postEvent(
                     MOUSE_REQUIRE, -1, self.realtiveX, self.realtiveY
@@ -422,7 +418,8 @@ class eventHandeler:
             )
 
         elif type == RELEASE_FLAG:
-            self.touchController.postEvent(RELEASE_FLAG, self.mouseTouchID, 0, 0)
+            self.touchController.postEvent(
+                RELEASE_FLAG, self.mouseTouchID, 0, 0)
             self.mouseTouchID = -1
 
     def handelKeyAction(self, keycode, updown):
@@ -464,7 +461,8 @@ class eventHandeler:
                         action["POS"][1] + getRand(),
                     )
                     time.sleep(action["INTERVAL"][0] / 1000)
-                    self.touchController.postEvent(RELEASE_FLAG, touch_id, -1, -1)
+                    self.touchController.postEvent(
+                        RELEASE_FLAG, touch_id, -1, -1)
                     time.sleep(action["INTERVAL"][1] / 1000)
             else:
                 self.keyMappingDatas[keycode] = False
@@ -475,7 +473,8 @@ class eventHandeler:
             if updown == DOWN and self.keyMappingDatas[keycode] == -1:
                 # down p0 sleep p1 sleep p2 sleep ...... pn-1 sleep  pn release
                 self.keyMappingDatas[keycode] = self.touchController.postEvent(
-                    REQURIE_FLAG, -1, action["POS_S"][0][0], action["POS_S"][0][1]
+                    REQURIE_FLAG, -
+                    1, action["POS_S"][0][0], action["POS_S"][0][1]
                 )
                 for pos in action["POS_S"][1:]:
                     time.sleep(action["INTERVAL"][0] / 1000)
@@ -504,7 +503,8 @@ class eventHandeler:
                     )
             else:
                 for touch_id in reversed(self.keyMappingDatas[keycode]):
-                    self.touchController.postEvent(RELEASE_FLAG, touch_id, -1, -1)
+                    self.touchController.postEvent(
+                        RELEASE_FLAG, touch_id, -1, -1)
 
     def printInfo(self):
         print(json.dumps(self.keyMap, indent=4))
@@ -561,7 +561,7 @@ class eventHandeler:
         if mapKey == None:
             print("unknow key:", key)
             return
-        if self.checkRepeat(mapKey, updown):#多个设备存在时防止重复触发
+        if self.checkRepeat(mapKey, updown):  # 多个设备存在时防止重复触发
             print("repeat key:", key)
             return
         if mapKey == "BTN_SELECT":
@@ -584,7 +584,8 @@ class eventHandeler:
                     print("KEY_CODE = ", mapKey, " not in keyMap")
             else:
                 self.postVirtualDev(
-                    "key" if type(mapKey) == int else "btn", mapKey, updown, devname
+                    "key" if type(
+                        mapKey) == int else "btn", mapKey, updown, devname
                 )
 
     def handelRelMove(self, rel_x, rel_y, mwheel_x, mwheel_y):
@@ -702,7 +703,8 @@ def devReader(path="", devname="", handeler=None):
             fcntl.ioctl(f, EVIOCGRAB(1), True)
             while True:
                 byte = f.read(EVENT_SIZE)
-                e_sec, e_usec, e_type, e_code, e_val = struct.unpack(EVENT_FORMAT, byte)
+                e_sec, e_usec, e_type, e_code, e_val = struct.unpack(
+                    EVENT_FORMAT, byte)
                 if e_type == EV_SYN and e_code == SYN_REPORT and e_val == 0:
                     if handeler(buffer, devname):
                         break
@@ -825,7 +827,7 @@ if __name__ == "__main__":
         "--touch",
         metavar="int",
         type=int,
-        default=0,
+        default=-1,
         required=False,
         help="touch event index 触屏设备号",
     )
@@ -925,7 +927,8 @@ if __name__ == "__main__":
         #             f"joystick config [{jsname}].json not found in joystickInfos \nplease run create_joystick_config.py to create it"
         #         )
         #         exit(4)  # 检测到未知手柄则提示用户先创建配置文件
-        for configFiles in os.listdir("joystickInfos"):  # 加载所有的手柄配置文件 因为可能会有远程events发来
+        # 加载所有的手柄配置文件 因为可能会有远程events发来
+        for configFiles in os.listdir("joystickInfos"):
             if configFiles.endswith(".json"):
                 jsConfig[configFiles[:-5]] = json.load(
                     open(os.path.join("joystickInfos", configFiles), "r")
@@ -942,6 +945,20 @@ if __name__ == "__main__":
             remoteEventListenerInstance = remoteEventListener(
                 args.port, handelerInstance
             )
+
+        # testDada = json.load(open("./testevents.json", "r"))
+        # start = time.time()
+        # for i in range(40):
+        #     for events in testDada:
+        #         # time.sleep(0.000001)
+        #         handelerInstance.handelEvents(events, "test")
+        # end = time.time()
+        # time.sleep(0.1)
+        # handelerInstance.destroy()
+        # print("handeled {} events in {} seconds".format(
+        #     40 * len(testDada), end - start))
+        # exit(0)
+        # handeled 370320 events in 8.650184869766235 seconds
     try:
         threads = []
         for eventPath in devices:
