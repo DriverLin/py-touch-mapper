@@ -253,6 +253,7 @@ if __name__ == "__main__":
                 exit()
             if event.type == KEYDOWN:
                 senderInstance.sendKey(event.scancode, DOWN)
+                print(event.scancode)
             elif event.type == KEYUP:
                 senderInstance.sendKey(event.scancode, UP)
                 if event.key == K_ESCAPE:
