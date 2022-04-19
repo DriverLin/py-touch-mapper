@@ -21,19 +21,6 @@ REL_WHEEL = 0x08
 REL_HWHEEL = 0x06
 SYN_REPORT = 0x00
 
-
-EVENT_FORMAT = "llHHI"
-EVENT_SIZE = struct.calcsize(EVENT_FORMAT)
-
-
-def eventPacker(e_type, e_code, e_value): return struct.pack(
-    EVENT_FORMAT, 0, 0, e_type, e_code, e_value
-)
-
-
-SYN_EVENT = eventPacker(EV_SYN, SYN_REPORT, 0x0)
-
-
 scan2linux = {
     224: 29,
     225: 42,
@@ -209,6 +196,22 @@ mousecodemap = [
     mousebtn['BTN_EXTRA'],
 ]
 
+def pack_events(events,name):
+    buffer = (len(events)).to_bytes(1, 'little', signed=False)
+    for (type,code,value) in events:
+        buffer += struct.pack('<HHi', type, code, value)
+    buffer += name.encode()
+    return buffer
+
+def unpack_events(buffer):
+    print(buffer)
+    length = buffer[0]
+    events = [
+        struct.unpack('<HHi', buffer[i*8+1:i*8+9])
+        for i in range(length)
+    ]
+    name = buffer[length*8+1:].decode()
+    return events, name
 
 class sender:
     def __init__(self, addr) -> None:
@@ -220,8 +223,7 @@ class sender:
 
     def sendKey(self, scancode, downup):
         if scan2linux[scancode] != None:
-            self.udpSocket.sendto(pickle.dumps(
-                [[[EV_KEY, scan2linux[scancode], downup]], DEV_NAME]), self.sendArr)
+            self.udpSocket.sendto(pack_events([[EV_KEY, scan2linux[scancode], downup]], DEV_NAME), self.sendArr)
 
     def sendMouseMove(self, x=None, y=None):
         events = []
@@ -229,20 +231,20 @@ class sender:
             events.append((EV_REL, REL_X, x))
         if y != None:
             events.append((EV_REL, REL_Y, y))
-        self.udpSocket.sendto(pickle.dumps([events, DEV_NAME]), self.sendArr)
+        self.udpSocket.sendto(pack_events(events, DEV_NAME), self.sendArr)
 
     def sendMouseBTN(self, btn, downup):
         if btn <= 7 and mousecodemap[btn] != None:
-            self.udpSocket.sendto(pickle.dumps(
-                [[[EV_KEY, mousecodemap[btn], downup]], DEV_NAME]), self.sendArr)
+            self.udpSocket.sendto(pack_events(
+                [[EV_KEY, mousecodemap[btn], downup]], DEV_NAME), self.sendArr)
 
     def sendWheel(self, value):
-        self.udpSocket.sendto(pickle.dumps(
-            [[[EV_REL, REL_WHEEL, value]], DEV_NAME]), self.sendArr)
+        self.udpSocket.sendto(pack_events(
+            [[EV_REL, REL_WHEEL, value]], DEV_NAME), self.sendArr)
 
 
 if __name__ == "__main__":
-    senderInstance = sender("192.168.1.64:9000")
+    senderInstance = sender("192.168.1.64:8888")
     pygame.init()
     screen = pygame.display.set_mode((320, 240), 0, 32)
     pygame.mouse.set_visible(False)
@@ -252,12 +254,11 @@ if __name__ == "__main__":
             if event.type == QUIT:
                 exit()
             if event.type == KEYDOWN:
-                senderInstance.sendKey(event.scancode, DOWN)
-                print(event.scancode)
-            elif event.type == KEYUP:
-                senderInstance.sendKey(event.scancode, UP)
                 if event.key == K_ESCAPE:
                     exit()
+                senderInstance.sendKey(event.scancode, DOWN)
+            elif event.type == KEYUP:
+                senderInstance.sendKey(event.scancode, UP)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 senderInstance.sendMouseBTN(event.button, DOWN)
             elif event.type == pygame.MOUSEBUTTONUP:

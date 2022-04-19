@@ -152,8 +152,7 @@ class touchController:
             self.last_touch_id = trueId
             bytes += eventPacker(EV_ABS, ABS_MT_SLOT, trueId)
             bytes += eventPacker(EV_ABS, ABS_MT_TRACKING_ID, trueId)
-            bytes += eventPacker(EV_KEY, BTN_TOUCH,
-                                 DOWN) if self.allocatedID_num == 1 else b''
+            bytes += eventPacker(EV_KEY, BTN_TOUCH,  DOWN) if self.allocatedID_num == 1 else b''
             bytes += eventPacker(EV_ABS, ABS_MT_POSITION_X, x & 0xFFFFFFFF)
             bytes += eventPacker(EV_ABS, ABS_MT_POSITION_Y, y & 0xFFFFFFFF)
             bytes += SYN_EVENT
@@ -595,7 +594,6 @@ class eventHandeler:
             if mouseMovd:
                 self.handelMouseMoveAction(offsetX=rel_x, offsetY=rel_y)
             if mouseWheelMoved:  # 滚轮映射按键并不会触发updown 只会在滚动时候触发一次 所以这里模拟按键按下0.01s
-
                 def quickClick():
                     wh_name = {
                         "1_0": "WH_LEFT",
@@ -782,11 +780,21 @@ class remoteEventListener:
         def handelThread():
             while self.running:
                 content = self.contentQueue.get()
-                [events, devname] = pickle.loads(content)
+                events, devname = self.unpack_events(content)
                 handelerInstance.handelEvents(events, devname)
 
         threading.Thread(target=recvThread).start()
         threading.Thread(target=handelThread).start()
+    
+    def unpack_events(self,buffer):
+        print(buffer)
+        length = buffer[0]
+        events = [
+            struct.unpack('<HHi', buffer[i*8+1:i*8+9])
+            for i in range(length)
+        ]
+        devname = buffer[length*8+1:].decode()
+        return events, devname
 
     def destroy(self):
         self.running = False
