@@ -1,17 +1,15 @@
+import HighlightOffIcon from '@mui/icons-material/HighlightOff';
+import { Button, IconButton, Input, Paper } from "@mui/material";
+import FormControl from '@mui/material/FormControl';
+import Grid from '@mui/material/Grid';
+import InputLabel from '@mui/material/InputLabel';
+import MenuItem from '@mui/material/MenuItem';
+import Select from '@mui/material/Select';
 import { useEffect, useRef, useState } from "react";
 // import ControlPanel from "./ControlPanel";
 import DraggableContainer from "./DraggableContainer";
-import Grid from '@mui/material/Grid';
-import { IconButton, Button, Input, Paper } from "@mui/material";
-import Box from '@mui/material/Box';
-import InputLabel from '@mui/material/InputLabel';
-import MenuItem from '@mui/material/MenuItem';
-import FormControl from '@mui/material/FormControl';
-import Select from '@mui/material/Select';
-import { click } from "@testing-library/user-event/dist/click";
-import HighlightOffIcon from '@mui/icons-material/HighlightOff';
-import * as keyNameMap from "./keynamemap.json"
 import JoystickListener from "./JoystickListener";
+import * as keyNameMap from "./keynamemap.json";
 
 
 function copyToClipboard(text) {
@@ -287,7 +285,7 @@ export default function Manager() {
                 const copy = { ...settings }
                 if (copy.screen.size[0] !== sc.width || copy.screen.size[1] !== sc.height) {
                     copy.screen.size = [sc.width, sc.height]
-                    copy.mouse.pos = [sc.width / 2 + 40, sc.height / 2]
+                    copy.mouse.pos = [sc.width / 2 + 580, sc.height / 2]
                     setSettings(copy)
                 }
 
