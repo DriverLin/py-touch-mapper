@@ -6,7 +6,7 @@
 
 ## 已迁移
 
-请使用[go版本](https://github.com/DriverLin/py-touch-mapper)
+请使用[go版本](https://github.com/DriverLin/go-touch-mapper)
 
 由于使用了uinput操作触屏
 
