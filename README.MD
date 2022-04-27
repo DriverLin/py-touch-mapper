@@ -4,6 +4,17 @@
 
 相比于C的版本，扩展功能的开发更加方便
 
+## 已迁移
+
+请使用[go版本](https://github.com/DriverLin/py-touch-mapper)
+
+由于使用了uinput操作触屏
+
+因此无需root权限也可完成所有功能
+
+但是无法在ADB shell里调用python
+
+因此使用golang重写
 
 ## 使用方法
 
